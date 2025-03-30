@@ -1,0 +1,376 @@
+// Writen by Gemini 2.5 Pro Experimental 03-25, 2025/03/30
+
+use anyhow::{Context, Result}; // Use anyhow for easy error handling
+use clap::Parser;
+use log::{error, info, warn}; // Logging macros
+use regex::Regex;
+use serde::Deserialize; // Trait for deserialization
+use std::{fs, path::PathBuf};
+
+// --- Data Structures Mirroring JSON ---
+// Use Option<T> for fields that might be missing or null
+// Use #[serde(default)] for booleans that might be missing (defaults to false)
+// Use #[serde(rename_all = "camelCase")] to map JSON keys to Rust fields
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct SafetySetting {
+    // Keep fields even if unused for complete deserialization
+    #[allow(dead_code)]
+    category: String,
+    #[allow(dead_code)]
+    threshold: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct RunSettings {
+    temperature: Option<f64>,
+    model: Option<String>,
+    top_p: Option<f64>,
+    top_k: Option<u32>,
+    max_output_tokens: Option<u32>,
+    // We don't strictly need all fields unless we use them
+    // safety_settings: Option<Vec<SafetySetting>>,
+    // response_mime_type: Option<String>,
+    // ... other fields
+}
+
+#[derive(Deserialize, Debug)]
+struct SystemInstruction {
+    // Text might be null or the whole object might be missing
+    text: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct Chunk {
+    // Text might be null or missing
+    text: Option<String>,
+    // Role is expected to be present
+    role: String,
+    // isThought might be missing, default to false
+    #[serde(default)]
+    is_thought: bool,
+    // token_count: Option<u32>, // ignore if not needed
+    // finish_reason: Option<String>, // ignore if not needed
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ChunkedPrompt {
+    // Chunks list is expected, but might be empty
+    chunks: Vec<Chunk>,
+    // pending_inputs: Option<Vec<PendingInput>>, // ignore if not needed
+}
+
+// #[derive(Deserialize, Debug)]
+// struct PendingInput { // ignore if not needed
+//     text: Option<String>,
+//     role: Option<String>,
+// }
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct Root {
+    run_settings: Option<RunSettings>,
+    system_instruction: Option<SystemInstruction>,
+    chunked_prompt: Option<ChunkedPrompt>,
+}
+
+// --- CLI Argument Parsing ---
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Path to the input JSON file.
+    #[arg(required = true)] // Make it mandatory
+    json_path: PathBuf,
+
+    /// Path to the output Markdown file.
+    /// If not provided, defaults to '[input_filename].md' in the same directory.
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+}
+
+// --- Formatting Logic ---
+
+/// Formats the metadata section from the parsed JSON data.
+fn format_metadata(root: &Root) -> Vec<String> {
+    let mut md_lines = Vec::new();
+    let mut has_metadata = false; // Track if the "## Metadata" header was added
+
+    // --- Run Settings ---
+    // Check if run_settings exists and is Some
+    if let Some(settings) = &root.run_settings {
+        if !has_metadata {
+            md_lines.push("## Metadata".to_string());
+            md_lines.push("".to_string()); // Blank line
+            has_metadata = true;
+        }
+        md_lines.push("### Run Settings".to_string());
+        // Selectively add settings if they exist (are Some)
+        if let Some(val) = &settings.model {
+            md_lines.push(format!("- **Model:** `{}`", val));
+        }
+        if let Some(val) = settings.temperature {
+            md_lines.push(format!("- **Temperature:** `{}`", val));
+        }
+        if let Some(val) = settings.top_p {
+            md_lines.push(format!("- **Top P:** `{}`", val));
+        }
+        if let Some(val) = settings.top_k {
+            md_lines.push(format!("- **Top K:** `{}`", val));
+        }
+        if let Some(val) = settings.max_output_tokens {
+            md_lines.push(format!("- **Max Output Tokens:** `{}`", val));
+        }
+        md_lines.push("".to_string()); // Blank line after settings
+    }
+
+    // --- System Instruction ---
+    // Check if system_instruction is Some and its text field is Some and not empty
+    if let Some(instruction) = &root.system_instruction {
+        if let Some(text) = &instruction.text {
+            if !text.trim().is_empty() {
+                if !has_metadata {
+                    md_lines.push("## Metadata".to_string());
+                    md_lines.push("".to_string());
+                    // has_metadata = true; // No need to set again if already set
+                }
+                md_lines.push("### System Instruction".to_string());
+                md_lines.push(text.trim().to_string());
+                md_lines.push("".to_string());
+            }
+        }
+    }
+
+    md_lines
+}
+
+/// Formats the conversation turns from the parsed JSON data.
+fn format_conversation(root: &Root) -> Vec<String> {
+    let mut md_lines = Vec::new();
+
+    // Check if chunked_prompt and chunks exist
+    let chunks = match &root.chunked_prompt {
+        Some(prompt) => &prompt.chunks,
+        None => {
+            warn!("No 'chunkedPrompt' found in JSON.");
+            // Return only the header if no chunks
+            md_lines.push("## Conversation".to_string());
+            md_lines.push("".to_string());
+            md_lines.push("*No conversation turns found in the JSON data.*".to_string());
+            return md_lines;
+        }
+    };
+
+    if chunks.is_empty() {
+        warn!("'chunks' array is empty.");
+        // Return only the header if chunks is empty
+        md_lines.push("## Conversation".to_string());
+        md_lines.push("".to_string());
+        md_lines.push("*Conversation turns array is empty.*".to_string());
+        return md_lines;
+    }
+
+    md_lines.push("## Conversation".to_string());
+    md_lines.push("".to_string()); // Blank line
+
+    let mut last_role: Option<String> = None;
+    let mut has_thought_pending = false; // Track if the last model output was a thought
+
+    for (i, chunk) in chunks.iter().enumerate() {
+        // Borrow role string for comparisons
+        let current_role = &chunk.role;
+        // Get text, trim, handle None or empty
+        let text = chunk
+            .text
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+
+        match current_role.as_str() {
+            "user" => {
+                // Add space before new user turn if not the first turn
+                if last_role.is_some() {
+                    md_lines.push("".to_string());
+                }
+                md_lines.push("### 🧑‍💻 User".to_string());
+                if let Some(t) = text {
+                    md_lines.push(t.to_string());
+                }
+                last_role = Some(current_role.clone());
+                has_thought_pending = false; // Reset flag on user turn
+            }
+            "model" => {
+                // Print Assistant header only if role changes from user or it's the first model chunk
+                if last_role.as_deref() != Some("model") {
+                    // Add space before new assistant turn if needed
+                    if last_role.is_some() {
+                        md_lines.push("".to_string());
+                    }
+                    md_lines.push("### 🤖 Assistant".to_string());
+                    // Add extra space if subheadings might follow
+                    if chunk.is_thought {
+                        md_lines.push("".to_string());
+                    }
+                }
+
+                if chunk.is_thought {
+                    // Add space before thought if previous was a response
+                    if last_role.as_deref() == Some("model") && !has_thought_pending {
+                        md_lines.push("".to_string());
+                    }
+                    md_lines.push("#### 🤔 Thought Process".to_string());
+                    if let Some(t) = text {
+                        md_lines.push(t.to_string());
+                    }
+                    has_thought_pending = true; // Mark that a thought was just processed
+                } else {
+                    // This chunk is a response
+                    // Only add the "Response" sub-heading if it follows a thought
+                    if has_thought_pending {
+                        md_lines.push("".to_string()); // Space before subheading
+                        md_lines.push("#### 💡 Response".to_string());
+                    }
+                    // If has_thought_pending is False, no sub-heading needed.
+                    if let Some(t) = text {
+                        md_lines.push(t.to_string());
+                    }
+                    has_thought_pending = false; // Reset flag as this is a response
+                }
+                last_role = Some(current_role.clone());
+            }
+            _ => {
+                warn!("Chunk {} has unknown role '{}'. Skipping.", i, current_role);
+                // Reset state just in case
+                has_thought_pending = false;
+                last_role = Some("unknown".to_string()); // Track unknown roles if needed
+            }
+        }
+    }
+
+    md_lines
+}
+
+// --- Main Application Logic ---
+fn main() -> Result<()> {
+    // Using anyhow::Result for easy error propagation
+    // Initialize logger - RUST_LOG=info cargo run ...
+    env_logger::init();
+
+    // Parse command line arguments using clap
+    let args = Args::parse();
+
+    let json_path = args.json_path;
+    info!("Starting conversion for: {}", json_path.display());
+
+    // --- Determine Output Path ---
+    let output_path = match args.output {
+        Some(path) => path,
+        None => {
+            // Default to same directory with .md extension
+            let mut default_path = json_path.clone();
+            if !default_path.set_extension("md") {
+                // Handle case where input path might not have a filename or extension
+                // e.g., if path is "/" or "C:\" - unlikely but possible
+                let filename = json_path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned() + ".md")
+                    .unwrap_or_else(|| "output.md".to_string());
+                default_path = json_path.join(filename);
+
+                // More robust: just append .md if set_extension fails
+                // let current_name = json_path.file_name().unwrap_or_default();
+                // let new_name = format!("{}.md", current_name.to_string_lossy());
+                // default_path = json_path.with_file_name(new_name);
+            }
+            info!(
+                "Output path not specified. Using default: {}",
+                default_path.display()
+            );
+            default_path
+        }
+    };
+
+    // --- Ensure Output Directory Exists ---
+    if let Some(parent_dir) = output_path.parent() {
+        fs::create_dir_all(parent_dir).with_context(|| {
+            format!("Could not create output directory {}", parent_dir.display())
+        })?;
+        info!("Ensured output directory exists: {}", parent_dir.display());
+    } else {
+        // This case means the output path is likely just a filename in the current dir, which is okay.
+        info!("Output path has no parent directory, assuming current directory.");
+    }
+
+    // --- Read JSON File ---
+    let json_content = fs::read_to_string(&json_path)
+        .with_context(|| format!("Failed to read JSON file: {}", json_path.display()))?;
+    info!("JSON file loaded successfully.");
+
+    // --- Parse JSON Content ---
+    let root: Root = serde_json::from_str(&json_content)
+        .with_context(|| format!("Failed to parse JSON content from: {}", json_path.display()))?;
+    info!("JSON content parsed successfully.");
+
+    // --- Generate Markdown Content ---
+    let mut markdown_lines = Vec::new();
+
+    // Add Title
+    let title = format!(
+        "Conversation Transcript: {}",
+        json_path.file_stem().map_or_else(
+            || "Unknown".to_string(), // Fallback if no file stem
+            |stem| stem.to_string_lossy().into_owned()
+        )
+    );
+    markdown_lines.push(title);
+    markdown_lines.push("".to_string());
+
+    // Add Metadata Section
+    let metadata_md = format_metadata(&root);
+    if !metadata_md.is_empty() {
+        markdown_lines.extend(metadata_md);
+        // Add extra space only if conversation follows and metadata was added
+        if root
+            .chunked_prompt
+            .as_ref()
+            .map_or(false, |p| !p.chunks.is_empty())
+        {
+            markdown_lines.push("".to_string());
+        }
+    }
+
+    // Add Conversation Section
+    let conversation_md = format_conversation(&root);
+    markdown_lines.extend(conversation_md);
+
+    // --- Prepare Final Output String ---
+    let mut final_content = markdown_lines.join("\n");
+
+    // Optional: Clean up multiple consecutive blank lines using regex
+    // This regex replaces 3 or more newlines with exactly 2 newlines
+    match Regex::new(r"\n{3,}") {
+        Ok(re) => {
+            final_content = re.replace_all(&final_content, "\n\n").to_string();
+            final_content = final_content.trim().to_string(); // Trim leading/trailing whitespace
+        }
+        Err(e) => {
+            error!("Failed to compile regex for cleaning newlines: {}", e);
+            // Proceed without regex cleaning if it fails
+            final_content = final_content.trim().to_string();
+        }
+    };
+
+    // --- Write Markdown File ---
+    fs::write(&output_path, final_content + "\n") // Ensure trailing newline
+        .with_context(|| format!("Failed to write Markdown file: {}", output_path.display()))?;
+
+    info!(
+        "Markdown file successfully generated: {}",
+        output_path.display()
+    );
+
+    Ok(()) // Indicate success
+}
