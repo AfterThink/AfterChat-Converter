@@ -3,9 +3,11 @@
 use anyhow::{Context, Result}; // Use anyhow for easy error handling
 use clap::Parser;
 use log::{error, info, warn}; // Logging macros
+use rayon::prelude::*;
 use regex::Regex;
 use serde::Deserialize; // Trait for deserialization
 use std::{fs, path::PathBuf};
+use walkdir::WalkDir;
 // --- Data Structures Mirroring JSON ---
 // Use Option<T> for fields that might be missing or null
 // Use #[serde(default)] for booleans that might be missing (defaults to false)
@@ -342,50 +344,166 @@ fn main() -> Result<()> {
     // Parse command line arguments using clap
     let args = Args::parse();
 
-    let json_path = args.json_path;
-    info!("Starting conversion for: {}", json_path.display());
-
-    // --- Determine Output Path ---
-    let output_path = match args.output {
-        Some(path) => path,
-        None => {
-            // Default to same directory with .md extension
-            let mut default_path = json_path.clone();
-            if !default_path.set_extension("md") {
-                // Handle case where input path might not have a filename or extension
-                // e.g., if path is "/" or "C:\" - unlikely but possible
-                let filename = json_path
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned() + ".md")
-                    .unwrap_or_else(|| "output.md".to_string());
-                default_path = json_path.join(filename);
-            }
-            info!(
-                "Output path not specified. Using default: {}",
-                default_path.display()
-            );
-            default_path
-        }
-    };
-
-    // --- Ensure Output Directory Exists ---
-    if let Some(parent_dir) = output_path.parent() {
-        fs::create_dir_all(parent_dir).with_context(|| {
-            format!("Could not create output directory {}", parent_dir.display())
-        })?;
-        info!("Ensured output directory exists: {}", parent_dir.display());
-    } else {
-        // This case means the output path is likely just a filename in the current dir, which is okay.
-        info!("Output path has no parent directory, assuming current directory.");
-    }
-
-    converter(&json_path, &output_path).with_context(|| {
+    let input_path = &args.json_path; // Use a shorter name for clarity
+    let input_metadata: fs::Metadata = fs::metadata(input_path).with_context(|| {
         format!(
-            "Failed to convert: {} -> {}. Maybe something error.",
-            json_path.display(),
-            output_path.display()
+            "Failed to read metadata for input: {}",
+            input_path.display()
         )
     })?;
+
+    // --- Handle based on Input Type (File or Directory) ---
+
+    if input_metadata.is_file() {
+        // --- Determine Output Path for Single File ---
+        let output_path = match args.output {
+            Some(path) => path,
+            None => {
+                // Default to same directory with .md extension
+                let mut default_path = input_path.clone();
+                if !default_path.set_extension("md") {
+                    // Handle case where input path might not have a filename or extension
+                    let filename = input_path
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned() + ".md")
+                        .unwrap_or_else(|| "output.md".to_string());
+                    default_path = input_path.join(filename);
+                }
+                info!(
+                    "Output path not specified. Using default: {}",
+                    default_path.display()
+                );
+                default_path
+            }
+        };
+
+        // --- Ensure Output Directory Exists ---
+        if let Some(parent_dir) = output_path.parent() {
+            // Check if it exists *and* is a directory
+            if !parent_dir.is_dir() {
+                fs::create_dir_all(parent_dir).with_context(|| {
+                    format!("Could not create output directory {}", parent_dir.display())
+                })?;
+            }
+        } else {
+            info!("Output path has no parent directory, assuming current directory.");
+        }
+
+        converter(input_path, &output_path).with_context(|| {
+            format!(
+                "Failed to convert single file: {} -> {}. Maybe something error.", // Kept your original message hint
+                input_path.display(),
+                output_path.display()
+            )
+        })?;
+    } else if input_metadata.is_dir() {
+        // --- Determine Output Base Directory ---
+        let output_base_dir: Option<PathBuf> = match args.output {
+            Some(path) => {
+                if !path.is_dir() {
+                    // Check if it exists *and* is a directory
+                    fs::create_dir_all(&path).with_context(|| {
+                        format!("Could not create output directory {}", path.display())
+                    })?;
+                }
+                info!("Outputting to directory: {}", path.display());
+                Some(path.clone())
+            }
+            None => {
+                // Output alongside original files
+                info!("Output directory not specified. Files will be generated alongside originals with .md extension.");
+                None
+            }
+        };
+
+        // --- Collect Files Recursively (using walkdir) ---
+        // We collect paths first to easily feed them into Rayon.
+        let files_to_process: Vec<PathBuf> = WalkDir::new(input_path)
+            .into_iter()
+            .filter_map(|entry_result| {
+                // Log errors accessing directory entries, but skip them
+                match entry_result {
+                    Ok(entry) => Some(entry),
+                    Err(e) => {
+                        warn!("Error accessing entry during directory walk: {}", e);
+                        None
+                    }
+                }
+            })
+            .filter(|entry| entry.file_type().is_file()) // Only process files
+            .map(|entry| entry.into_path())
+            .collect();
+
+        info!(
+            "Found {} potential files to process in directory.",
+            files_to_process.len()
+        );
+
+        // --- Process Files in Parallel (using rayon) ---
+        files_to_process
+            .par_iter() // Use parallel iterator
+            .for_each(|input_file_path| {
+                // Use a closure to handle errors for individual files cleanly
+                let result: Result<()> = (|| {
+                    // --- Calculate Output Path for Each File ---
+                    let output_md_path = match &output_base_dir {
+                        Some(base_dir) => {
+                            // Get relative path from input base dir
+                            let relative_path = input_file_path.strip_prefix(input_path).expect(
+                                "Internal error: file path should always be prefixed by input dir",
+                            ); // Should not fail if walkdir works correctly
+
+                            // Join with output base dir and set extension
+                            let mut target_path = base_dir.join(relative_path);
+                            target_path.set_extension("md"); // Handles replacing or adding extension
+                            target_path
+                        }
+                        None => {
+                            // Output alongside: Clone input path and set extension
+                            let mut target_path = input_file_path.clone();
+                            target_path.set_extension("md");
+                            target_path
+                        }
+                    };
+
+                    // --- Ensure Specific Output Directory Exists (for this file) ---
+                    // This is crucial for the directory output structure.
+                    if let Some(parent_dir) = output_md_path.parent() {
+                        if !parent_dir.is_dir() {
+                            // Avoid redundant calls if dir already exists
+                            // Note: Potential race condition if multiple threads try to create the same dir.
+                            // `create_dir_all` is generally idempotent, so it's usually okay.
+                            fs::create_dir_all(parent_dir).with_context(|| {
+                                format!(
+                                    "Could not create output directory for file: {}",
+                                    parent_dir.display()
+                                )
+                            })?;
+                        }
+                    }
+
+                    // --- Call Converter for This File ---
+                    converter(input_file_path, &output_md_path).with_context(|| {
+                        format!(
+                            "Error during conversion: {} -> {}",
+                            input_file_path.display(),
+                            output_md_path.display()
+                        )
+                    })?;
+                    // Optional: Log success per file (can be verbose)
+                    // info!("Successfully converted {} -> {}", input_file_path.display(), output_md_path.display());
+                    Ok(())
+                })(); // Immediately invoke the closure
+
+                // --- Log Individual File Errors ---
+                // Don't stop the whole process for one file error, just log it.
+                if let Err(e) = result {
+                    error!("Failed processing {}: {:?}", input_file_path.display(), e);
+                }
+            });
+
+        info!("Finished processing directory.");
+    }
 
     Ok(())
 }

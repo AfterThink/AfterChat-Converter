@@ -1,13 +1,15 @@
 [package]
 name = "google-ai-studio-json-converter"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
-clap = { version = "4.4", features = ["derive"] }  # Or latest clap version 4.x
+clap = { version = "4.4", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 log = "0.4"
-env_logger = "0.10"                                # Or latest env_logger version
+env_logger = "0.11.8"
 anyhow = "1.0"
-regex = "1.10"                                     # Or latest regex version
+regex = "1.10"
+walkdir = "2.5.0"
+rayon = "1.10.0"
