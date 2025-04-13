@@ -6,7 +6,6 @@ use log::{error, info, warn}; // Logging macros
 use regex::Regex;
 use serde::Deserialize; // Trait for deserialization
 use std::{fs, path::PathBuf};
-
 // --- Data Structures Mirroring JSON ---
 // Use Option<T> for fields that might be missing or null
 // Use #[serde(default)] for booleans that might be missing (defaults to false)
@@ -253,65 +252,19 @@ fn format_conversation(root: &Root) -> Vec<String> {
     md_lines
 }
 
-// --- Main Application Logic ---
-fn main() -> Result<()> {
-    // Using anyhow::Result for easy error propagation
-    // Initialize logger - RUST_LOG=info cargo run ...
-    env_logger::init();
-
-    // Parse command line arguments using clap
-    let args = Args::parse();
-
-    let json_path = args.json_path;
-    info!("Starting conversion for: {}", json_path.display());
-
-    // --- Determine Output Path ---
-    let output_path = match args.output {
-        Some(path) => path,
-        None => {
-            // Default to same directory with .md extension
-            let mut default_path = json_path.clone();
-            if !default_path.set_extension("md") {
-                // Handle case where input path might not have a filename or extension
-                // e.g., if path is "/" or "C:\" - unlikely but possible
-                let filename = json_path
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned() + ".md")
-                    .unwrap_or_else(|| "output.md".to_string());
-                default_path = json_path.join(filename);
-
-                // More robust: just append .md if set_extension fails
-                // let current_name = json_path.file_name().unwrap_or_default();
-                // let new_name = format!("{}.md", current_name.to_string_lossy());
-                // default_path = json_path.with_file_name(new_name);
-            }
-            info!(
-                "Output path not specified. Using default: {}",
-                default_path.display()
-            );
-            default_path
-        }
-    };
-
-    // --- Ensure Output Directory Exists ---
-    if let Some(parent_dir) = output_path.parent() {
-        fs::create_dir_all(parent_dir).with_context(|| {
-            format!("Could not create output directory {}", parent_dir.display())
-        })?;
-        info!("Ensured output directory exists: {}", parent_dir.display());
-    } else {
-        // This case means the output path is likely just a filename in the current dir, which is okay.
-        info!("Output path has no parent directory, assuming current directory.");
-    }
-
+fn converter(input_json_path: &PathBuf, output_md_path: &PathBuf) -> Result<()> {
     // --- Read JSON File ---
-    let json_content = fs::read_to_string(&json_path)
-        .with_context(|| format!("Failed to read JSON file: {}", json_path.display()))?;
+    let json_content = fs::read_to_string(&input_json_path)
+        .with_context(|| format!("Failed to read JSON file: {}", input_json_path.display()))?;
     info!("JSON file loaded successfully.");
 
     // --- Parse JSON Content ---
-    let root: Root = serde_json::from_str(&json_content)
-        .with_context(|| format!("Failed to parse JSON content from: {}", json_path.display()))?;
+    let root: Root = serde_json::from_str(&json_content).with_context(|| {
+        format!(
+            "Failed to parse JSON content from: {}",
+            input_json_path.display()
+        )
+    })?;
     info!("JSON content parsed successfully.");
 
     // --- Generate Markdown Content ---
@@ -320,7 +273,7 @@ fn main() -> Result<()> {
     // Add Title
     let title = format!(
         "Conversation Transcript: {}",
-        json_path.file_stem().map_or_else(
+        input_json_path.file_stem().map_or_else(
             || "Unknown".to_string(), // Fallback if no file stem
             |stem| stem.to_string_lossy().into_owned()
         )
@@ -364,13 +317,75 @@ fn main() -> Result<()> {
     };
 
     // --- Write Markdown File ---
-    fs::write(&output_path, final_content + "\n") // Ensure trailing newline
-        .with_context(|| format!("Failed to write Markdown file: {}", output_path.display()))?;
+    fs::write(&output_md_path, final_content + "\n") // Ensure trailing newline
+        .with_context(|| {
+            format!(
+                "Failed to write Markdown file: {}",
+                output_md_path.display()
+            )
+        })?;
 
     info!(
         "Markdown file successfully generated: {}",
-        output_path.display()
+        output_md_path.display()
     );
 
-    Ok(()) // Indicate success
+    Ok(())
+}
+
+// --- Main Application Logic ---
+fn main() -> Result<()> {
+    // Using anyhow::Result for easy error propagation
+    // Initialize logger - RUST_LOG=info cargo run ...
+    env_logger::init();
+
+    // Parse command line arguments using clap
+    let args = Args::parse();
+
+    let json_path = args.json_path;
+    info!("Starting conversion for: {}", json_path.display());
+
+    // --- Determine Output Path ---
+    let output_path = match args.output {
+        Some(path) => path,
+        None => {
+            // Default to same directory with .md extension
+            let mut default_path = json_path.clone();
+            if !default_path.set_extension("md") {
+                // Handle case where input path might not have a filename or extension
+                // e.g., if path is "/" or "C:\" - unlikely but possible
+                let filename = json_path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned() + ".md")
+                    .unwrap_or_else(|| "output.md".to_string());
+                default_path = json_path.join(filename);
+            }
+            info!(
+                "Output path not specified. Using default: {}",
+                default_path.display()
+            );
+            default_path
+        }
+    };
+
+    // --- Ensure Output Directory Exists ---
+    if let Some(parent_dir) = output_path.parent() {
+        fs::create_dir_all(parent_dir).with_context(|| {
+            format!("Could not create output directory {}", parent_dir.display())
+        })?;
+        info!("Ensured output directory exists: {}", parent_dir.display());
+    } else {
+        // This case means the output path is likely just a filename in the current dir, which is okay.
+        info!("Output path has no parent directory, assuming current directory.");
+    }
+
+    converter(&json_path, &output_path).with_context(|| {
+        format!(
+            "Failed to convert: {} -> {}. Maybe something error.",
+            json_path.display(),
+            output_path.display()
+        )
+    })?;
+
+    Ok(())
 }
