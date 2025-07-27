@@ -2,6 +2,7 @@
 
 use anyhow::{Context, Result}; // Use anyhow for easy error handling
 use clap::Parser;
+use filetime::{set_file_times, FileTime};
 use log::{error, info, warn}; // Logging macros
 use rayon::prelude::*;
 use regex::Regex;
@@ -332,6 +333,28 @@ fn converter(input_json_path: &PathBuf, output_md_path: &PathBuf) -> Result<()> 
         output_md_path.display()
     );
 
+    let input_metadata = fs::metadata(&input_json_path).with_context(|| {
+        format!(
+            "Failed to read metadata for source file: {}",
+            input_json_path.display()
+        )
+    })?;
+
+    let atime = FileTime::from_last_access_time(&input_metadata);
+    let mtime = FileTime::from_last_modification_time(&input_metadata);
+
+    if let Err(e) = set_file_times(&output_md_path, atime, mtime) {
+        warn!(
+            "Failed to set timestamps for {}: {}. The file was created successfully.",
+            output_md_path.display(),
+            e
+        );
+    }
+
+    info!(
+        "Markdown file successfully generated: {}",
+        output_md_path.display()
+    );
     Ok(())
 }
 
