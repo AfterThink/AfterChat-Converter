@@ -7,13 +7,6 @@ if (Test-Path $workDir) {
 }
 New-Item -ItemType Directory -Path $workDir | Out-Null
 
-$chatformat = @"
-# Format
-
-## Conversation
-"@
-$chatformat | Set-Content (Join-Path $workDir "chatformat.txt")
-
 $json = @"
 [
   {
@@ -47,7 +40,7 @@ $json | Set-Content $inputJson
 
 cargo run --quiet -- $inputJson
 
-$mdPath = Join-Path $workDir "drag.md"
+$mdPath = Join-Path $workDir "Drag_Smoke.md"
 if (!(Test-Path $mdPath)) {
     throw "Drag-drop smoke test failed: expected output markdown not found at $mdPath"
 }

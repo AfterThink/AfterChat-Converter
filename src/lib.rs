@@ -11,7 +11,7 @@ use filetime::{FileTime, set_file_times};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, info, warn};
 use rayon::prelude::*;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use walkdir::WalkDir;
 
@@ -94,7 +94,7 @@ struct Session {
     updated_at: Option<i64>,
     #[serde(default)]
     chat: Option<SessionChat>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_vec_or_default")]
     messages: Vec<MessageNode>,
 }
 
@@ -106,7 +106,7 @@ struct SessionChat {
 
 #[derive(Debug, Clone, Deserialize)]
 struct SessionHistory {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_map_or_default")]
     messages: HashMap<String, MessageNode>,
 }
 
@@ -120,7 +120,7 @@ struct MessageNode {
     content: Option<String>,
     #[serde(default)]
     reasoning_content: Option<Value>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_vec_or_default")]
     content_list: Vec<MessageContent>,
     #[serde(default)]
     model: Option<String>,
@@ -128,7 +128,11 @@ struct MessageNode {
     model_name: Option<String>,
     #[serde(default, rename = "parentId")]
     parent_id: Option<String>,
-    #[serde(default, rename = "childrenIds")]
+    #[serde(
+        default,
+        rename = "childrenIds",
+        deserialize_with = "de_vec_or_default"
+    )]
     children_ids: Vec<String>,
     #[serde(default)]
     timestamp: Option<i64>,
@@ -460,18 +464,17 @@ fn write_session_batch(
 
     let failures: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
     let generated = Arc::new(AtomicUsize::new(0));
+    let mut name_counters: HashMap<String, usize> = HashMap::new();
 
-    for (batch_idx, batch) in sessions.chunks(LARGE_BATCH_SIZE).enumerate() {
-        let base_index = batch_idx * LARGE_BATCH_SIZE;
+    for batch in sessions.chunks(LARGE_BATCH_SIZE) {
+        let planned_names = build_batch_file_names(batch, &mut name_counters);
 
         batch.par_iter().enumerate().for_each(|(offset, session)| {
-            let index = base_index + offset + 1;
             let rendered = render_session_markdown(session, request_id, source_path);
-            let file_name = format!(
-                "{:04}-{}.md",
-                index,
-                build_session_file_name(&rendered.title_hint, session.id.as_deref(), "session")
-            );
+            let file_name = planned_names
+                .get(offset)
+                .cloned()
+                .unwrap_or_else(|| "session.md".to_string());
             let target = output_dir.join(file_name);
 
             if let Err(err) = write_rendered_session(&target, &rendered) {
@@ -502,6 +505,28 @@ fn write_session_batch(
     }
 
     Ok(generated.load(Ordering::SeqCst))
+}
+
+fn build_batch_file_names(batch: &[Session], counters: &mut HashMap<String, usize>) -> Vec<String> {
+    let mut names = Vec::with_capacity(batch.len());
+
+    for session in batch {
+        let base = build_session_file_name(
+            session.title.as_deref().unwrap_or_default(),
+            session.id.as_deref(),
+            "session",
+        );
+
+        let count = counters.entry(base.clone()).or_insert(0);
+        *count += 1;
+        if *count == 1 {
+            names.push(format!("{base}.md"));
+        } else {
+            names.push(format!("{base}-{}.md", *count));
+        }
+    }
+
+    names
 }
 
 fn write_rendered_session(path: &Path, rendered: &RenderedSession) -> Result<()> {
@@ -558,12 +583,79 @@ fn parse_input_payload(value: Value) -> Result<ParsedInput> {
 
 fn parse_sessions_from_array(arr: &[Value]) -> Result<Vec<Session>> {
     let mut sessions = Vec::with_capacity(arr.len());
-    for item in arr {
-        let session: Session = serde_json::from_value(item.clone())
-            .context("array item is not a valid session object")?;
-        sessions.push(session);
+    let mut skipped = 0usize;
+
+    for (idx, item) in arr.iter().enumerate() {
+        if item.is_null() {
+            skipped += 1;
+            debug!("skip null session item at index {}", idx);
+            continue;
+        }
+
+        if !item.is_object() {
+            skipped += 1;
+            warn!(
+                "skip non-object session item at index {} with type {}",
+                idx,
+                json_type_name(item)
+            );
+            continue;
+        }
+
+        match serde_json::from_value::<Session>(item.clone()) {
+            Ok(session) => sessions.push(session),
+            Err(err) => {
+                skipped += 1;
+                warn!("skip invalid session item at index {}: {}", idx, err);
+            }
+        }
     }
+
+    if sessions.is_empty() {
+        bail!(
+            "array contains no valid session objects (total: {}, skipped: {})",
+            arr.len(),
+            skipped
+        );
+    }
+
+    if skipped > 0 {
+        warn!(
+            "parsed {} valid sessions and skipped {} invalid items in array",
+            sessions.len(),
+            skipped
+        );
+    }
+
     Ok(sessions)
+}
+
+fn de_vec_or_default<'de, D, T>(deserializer: D) -> std::result::Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<Vec<T>>::deserialize(deserializer).map(Option::unwrap_or_default)
+}
+
+fn de_map_or_default<'de, D, K, V>(deserializer: D) -> std::result::Result<HashMap<K, V>, D::Error>
+where
+    D: Deserializer<'de>,
+    K: std::hash::Hash + Eq + Deserialize<'de>,
+    V: Deserialize<'de>,
+{
+    Option::<HashMap<K, V>>::deserialize(deserializer).map(Option::unwrap_or_default)
+}
+
+fn json_type_name(value: &Value) -> &'static str {
+    match value {
+        Value::Null => "null",
+        Value::Bool(_) => "bool",
+        Value::Number(_) => "number",
+        Value::String(_) => "string",
+        Value::Array(_) => "array",
+        Value::Object(_) => "object",
+    }
 }
 
 fn render_session_markdown(
@@ -574,7 +666,8 @@ fn render_session_markdown(
     let message_map = collect_messages(session);
     let dialogue = extract_dialogue(&message_map);
 
-    let model = detect_model(&message_map).unwrap_or_else(|| "unknown".to_string());
+    let model_raw = detect_model(&message_map).unwrap_or_else(|| "unknown".to_string());
+    let model = normalize_model_namespace(&model_raw);
     let tags = detect_tags(session);
     debug!("meta tags for {:?}: {:?}", session.id, tags);
 
@@ -870,6 +963,19 @@ fn detect_model(message_map: &HashMap<String, MessageNode>) -> Option<String> {
     }
 
     None
+}
+
+fn normalize_model_namespace(model_name: &str) -> String {
+    let cleaned = model_name.trim().trim_matches('`');
+    if cleaned.is_empty() {
+        return "models/unknown".to_string();
+    }
+
+    if cleaned.starts_with("models/") {
+        cleaned.to_string()
+    } else {
+        format!("models/{}", cleaned)
+    }
 }
 
 fn detect_tags(session: &Session) -> Vec<String> {
@@ -1316,5 +1422,17 @@ mod tests {
         assert!(rendered.contains("first think"));
         assert!(rendered.contains("#### 💡 Response"));
         assert!(rendered.contains("final answer"));
+    }
+
+    #[test]
+    fn model_namespace_is_normalized() {
+        assert_eq!(
+            normalize_model_namespace("Qwen3.5-397B-A17B"),
+            "models/Qwen3.5-397B-A17B"
+        );
+        assert_eq!(
+            normalize_model_namespace("models/openai/gpt-4.1"),
+            "models/openai/gpt-4.1"
+        );
     }
 }

@@ -46,9 +46,11 @@ cargo run -- examples/small.json
   - `## Metadata`
   - `### Run Settings`
   - `## Conversation`
+- `Model` 字段固定写为 `models/<modelname>`（若原值已是 `models/...` 则保持）。
 - 文件命名：
   - 单会话默认优先使用会话 `title` 作为文件名（非法字符自动清理）
   - 若 `title` 缺失则回退到会话 `id`，再回退到源文件名
+  - 大 JSON 拆分不再带序号前缀；如重名自动追加 `-2/-3` 后缀
 - 消息头：
   - `### 🧑‍💻 User`
   - `### 🤖 Assistant`

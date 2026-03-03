@@ -47,10 +47,11 @@ This tool converts Qwen-like JSON conversation exports into Markdown files follo
   - fallback: sanitized session `id`
   - final fallback: source file stem
 - Wrapped split output:
-  - `{index:04}-{sanitized_title_or_id}.md`
+  - `{sanitized_title_or_id}.md`
+  - if duplicated, auto suffix: `{name}-2.md`, `{name}-3.md`, ...
 
 ## Metadata fields
-- `Model`
+- `Model` (stored as `models/<modelname>`)
 - `Tags` (normalized)
 - `Conversation ID`
 - `User ID`
@@ -75,7 +76,7 @@ This tool converts Qwen-like JSON conversation exports into Markdown files follo
   - trim whitespace, wrapping quotes/backticks, leading `#`
   - delimiter precedence: comma, semicolon, then whitespace
   - case-insensitive de-duplication while preserving first spelling
-- `model`: first available assistant `modelName`, fallback `model`, fallback `unknown`
+- `model`: first available assistant `modelName`, fallback `model`, fallback `unknown`; rendered as `models/<modelname>`
 - timestamps:
   - source from message/session timestamp fields
   - millisecond timestamps converted to seconds
