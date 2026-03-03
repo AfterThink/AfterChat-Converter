@@ -1,0 +1,17 @@
+/target/
+
+# Build artifacts
+/*.exe
+/*.pdb
+
+# Local outputs
+/out/
+/output/
+**/error.log
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
