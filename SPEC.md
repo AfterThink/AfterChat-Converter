@@ -7,8 +7,8 @@
 ## 2. CLI 设计
 
 ## 命令
-- `qwen-markdown-converter convert -i <input> [-o <output>] [--progress true|false]`
-- Windows 拖拽模式：`qwen-markdown-converter <path1> [path2 ...]`
+- `qwen-json-converter convert -i <input> [-o <output>] [--progress true|false]`
+- Windows 拖拽模式：`qwen-json-converter <path1> [path2 ...]`
 
 ## 参数
 - `-i, --input <path>`：输入 JSON 文件或目录

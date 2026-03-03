@@ -1,4 +1,4 @@
-# qwen-markdown-converter
+# qwen-json-converter
 
 Rust CLI tool for converting exported Qwen-style JSON chat records into Markdown files.
 

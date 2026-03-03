@@ -4,11 +4,11 @@ use std::process::ExitCode;
 use clap::{ArgAction, Args, Parser, Subcommand};
 use env_logger::Env;
 use log::{error, info, warn};
-use qwen_markdown_converter::{ConvertOptions, run_conversion};
+use qwen_json_converter::{ConvertOptions, run_conversion};
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "qwen-markdown-converter",
+    name = "qwen-json-converter",
     version,
     about = "Convert Qwen export JSON into markdown conversations"
 )]
