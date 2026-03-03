@@ -1019,6 +1019,10 @@ fn extract_tags_from_value(value: Option<&Value>) -> Option<Vec<String>> {
             .filter_map(Value::as_str)
             .map(ToOwned::to_owned)
             .collect::<Vec<_>>();
+        if looks_like_garbled_tags(&tags) {
+            warn!("ignore garbled meta.tags array payload");
+            return None;
+        }
         return Some(normalize_tags(tags));
     }
 
@@ -1030,14 +1034,69 @@ fn extract_tags_from_value(value: Option<&Value>) -> Option<Vec<String>> {
 
         if cleaned.starts_with('[') && cleaned.ends_with(']') {
             if let Ok(parsed) = serde_json::from_str::<Vec<String>>(cleaned) {
+                if looks_like_garbled_tags(&parsed) {
+                    warn!("ignore garbled meta.tags string payload");
+                    return None;
+                }
                 return Some(normalize_tags(parsed));
             }
         }
 
-        return Some(normalize_tags(split_tag_text(cleaned)));
+        let tags = split_tag_text(cleaned);
+        if looks_like_garbled_tags(&tags) {
+            warn!("ignore garbled split tags payload");
+            return None;
+        }
+        return Some(normalize_tags(tags));
     }
 
     None
+}
+
+fn looks_like_garbled_tags(tags: &[String]) -> bool {
+    if tags.len() < 8 {
+        return false;
+    }
+
+    let mut non_empty = 0usize;
+    let mut single_char = 0usize;
+    let mut punctuation_or_ctrl = 0usize;
+    let mut has_brace = false;
+    let mut has_quote = false;
+
+    for raw in tags {
+        let token = raw.trim();
+        if token.is_empty() {
+            continue;
+        }
+        non_empty += 1;
+        if token.chars().count() <= 1 {
+            single_char += 1;
+        }
+        if token == "{" || token == "}" || token == "[" || token == "]" {
+            has_brace = true;
+        }
+        if token == "\"" || token == "'" || token == "`" {
+            has_quote = true;
+        }
+        if token
+            .chars()
+            .all(|c| c.is_ascii_punctuation() || c.is_control() || c.is_whitespace())
+        {
+            punctuation_or_ctrl += 1;
+        }
+    }
+
+    if non_empty == 0 {
+        return true;
+    }
+
+    let single_ratio = single_char as f64 / non_empty as f64;
+    let punct_ratio = punctuation_or_ctrl as f64 / non_empty as f64;
+
+    (single_ratio >= 0.7 && punct_ratio >= 0.2)
+        || (single_ratio >= 0.85)
+        || (single_ratio >= 0.6 && has_brace && has_quote)
 }
 
 fn split_tag_text(text: &str) -> Vec<String> {
@@ -1434,5 +1493,12 @@ mod tests {
             normalize_model_namespace("models/openai/gpt-4.1"),
             "models/openai/gpt-4.1"
         );
+    }
+
+    #[test]
+    fn garbled_char_bag_tags_are_rejected() {
+        let value = serde_json::json!([",", "\n", "e", "}", "c", ":", "a", "{", "\"", "[", "]"]);
+        let parsed = extract_tags_from_value(Some(&value));
+        assert!(parsed.is_none());
     }
 }

@@ -58,6 +58,7 @@ cargo run -- examples/small.json
   - `#### 🤔 Thought Process`
   - `#### 💡 Response`
 - 对于“重新提问/重答”分支，会重复用户问题并分别附上各分支回答
+- `meta.tags` 若被识别为乱码字符集合（例如单字符符号数组），会自动忽略并回退到默认标签策略
 
 ## English
 
@@ -92,3 +93,4 @@ cargo clippy -- -D warnings
 ## Notes
 - Markdown 输出格式为程序内置固定格式（与 `chatformat.txt` 约定一致），无需额外模板文件。
 - When converting multiple inputs, `-o` must be a directory path.
+- Garbled `meta.tags` payloads (character-bag arrays) are ignored automatically.

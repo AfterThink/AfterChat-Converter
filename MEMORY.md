@@ -24,3 +24,4 @@ This file records stable decisions from recent iterations.
 ## Robustness
 - Parser tolerates `null` for list/map-like fields by treating them as empty.
 - Invalid items inside array payloads are skipped with warnings instead of aborting whole conversion.
+- Garbled `meta.tags` character-bag payloads are ignored and fallback tags are used.
