@@ -119,6 +119,8 @@ struct MessageNode {
     #[serde(default)]
     content: Option<String>,
     #[serde(default)]
+    reasoning_content: Option<Value>,
+    #[serde(default)]
     content_list: Vec<MessageContent>,
     #[serde(default)]
     model: Option<String>,
@@ -142,6 +144,8 @@ struct MessageContent {
     content: Option<String>,
     #[serde(default)]
     phase: Option<String>,
+    #[serde(default)]
+    extra: Option<Value>,
 }
 
 pub fn run_conversion(options: ConvertOptions) -> Result<RunSummary> {
@@ -356,18 +360,29 @@ fn process_one_json_file(
 
     match parsed_input {
         ParsedInput::Single(session) => {
-            let target_file = single_output_file
-                .unwrap_or_else(|| parent_dir.join(format!("{}.md", source_stem)));
-
             let rendered = render_session_markdown(&session, None, &task.source);
+            let target_file = single_output_file.unwrap_or_else(|| {
+                let name = build_session_file_name(
+                    &rendered.title_hint,
+                    session.id.as_deref(),
+                    &source_stem,
+                );
+                parent_dir.join(format!("{name}.md"))
+            });
             write_rendered_session(&target_file, &rendered)?;
             Ok(1)
         }
         ParsedInput::Sessions(sessions) => {
             if sessions.len() == 1 {
-                let target_file = single_output_file
-                    .unwrap_or_else(|| parent_dir.join(format!("{}.md", source_stem)));
                 let rendered = render_session_markdown(&sessions[0], None, &task.source);
+                let target_file = single_output_file.unwrap_or_else(|| {
+                    let name = build_session_file_name(
+                        &rendered.title_hint,
+                        sessions[0].id.as_deref(),
+                        &source_stem,
+                    );
+                    parent_dir.join(format!("{name}.md"))
+                });
                 write_rendered_session(&target_file, &rendered)?;
                 return Ok(1);
             }
@@ -455,7 +470,7 @@ fn write_session_batch(
             let file_name = format!(
                 "{:04}-{}.md",
                 index,
-                build_session_file_name(&rendered.title_hint, session.id.as_deref())
+                build_session_file_name(&rendered.title_hint, session.id.as_deref(), "session")
             );
             let target = output_dir.join(file_name);
 
@@ -977,27 +992,33 @@ fn extract_plain_content(message: &MessageNode) -> String {
 }
 
 fn extract_assistant_content(message: &MessageNode) -> String {
-    if let Some(content) = message.content.as_deref() {
-        if !content.trim().is_empty() {
-            return content.to_string();
-        }
-    }
-
     let mut thoughts = Vec::new();
     let mut responses = Vec::new();
 
-    for block in &message.content_list {
-        let content = match block.content.as_deref().filter(|s| !s.trim().is_empty()) {
-            Some(c) => c,
-            None => continue,
-        };
+    if let Some(reasoning) = &message.reasoning_content {
+        collect_strings_from_value(reasoning, &mut thoughts);
+    }
 
+    for block in &message.content_list {
         let phase = block.phase.as_deref().unwrap_or_default().to_lowercase();
+        let content = block.content.as_deref().filter(|s| !s.trim().is_empty());
+
         if phase.contains("thinking") {
-            thoughts.push(content.to_string());
-        } else {
-            responses.push(content.to_string());
+            if let Some(value) = content {
+                push_unique_text(&mut thoughts, value.to_string());
+            }
+            if let Some(extra) = &block.extra {
+                for thought in extract_thoughts_from_extra(extra) {
+                    push_unique_text(&mut thoughts, thought);
+                }
+            }
+        } else if let Some(value) = content {
+            push_unique_text(&mut responses, value.to_string());
         }
+    }
+
+    if let Some(content) = message.content.as_deref().filter(|s| !s.trim().is_empty()) {
+        push_unique_text(&mut responses, content.to_string());
     }
 
     match (thoughts.is_empty(), responses.is_empty()) {
@@ -1006,10 +1027,60 @@ fn extract_assistant_content(message: &MessageNode) -> String {
             thoughts.join("\n\n"),
             responses.join("\n\n")
         ),
-        (false, true) => thoughts.join("\n\n"),
+        (false, true) => format!("#### 🤔 Thought Process\n{}", thoughts.join("\n\n")),
         (true, false) => responses.join("\n\n"),
         (true, true) => String::new(),
     }
+}
+
+fn extract_thoughts_from_extra(extra: &Value) -> Vec<String> {
+    let mut thoughts = Vec::new();
+
+    if let Some(value) = extra
+        .get("summary_thought")
+        .and_then(|v| v.get("content"))
+        .or_else(|| extra.get("summary_thought"))
+    {
+        collect_strings_from_value(value, &mut thoughts);
+    }
+
+    if let Some(value) = extra.get("thinking").or_else(|| extra.get("thought")) {
+        collect_strings_from_value(value, &mut thoughts);
+    }
+
+    thoughts
+}
+
+fn collect_strings_from_value(value: &Value, out: &mut Vec<String>) {
+    match value {
+        Value::String(text) => {
+            push_unique_text(out, text.to_string());
+        }
+        Value::Array(items) => {
+            for item in items {
+                collect_strings_from_value(item, out);
+            }
+        }
+        Value::Object(map) => {
+            for value in map.values() {
+                collect_strings_from_value(value, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn push_unique_text(out: &mut Vec<String>, candidate: String) {
+    let normalized = candidate.trim();
+    if normalized.is_empty() {
+        return;
+    }
+
+    if out.iter().any(|line| line.trim() == normalized) {
+        return;
+    }
+
+    out.push(normalized.to_string());
 }
 
 fn first_non_empty_message_field<F>(
@@ -1034,7 +1105,11 @@ where
     None
 }
 
-fn build_session_file_name(title_hint: &str, fallback_id: Option<&str>) -> String {
+fn build_session_file_name(
+    title_hint: &str,
+    fallback_id: Option<&str>,
+    fallback_name: &str,
+) -> String {
     let sanitized = sanitize_file_name(title_hint);
     if !sanitized.is_empty() {
         return sanitized;
@@ -1047,7 +1122,12 @@ fn build_session_file_name(title_hint: &str, fallback_id: Option<&str>) -> Strin
         }
     }
 
-    "session".to_string()
+    let fallback = sanitize_file_name(fallback_name);
+    if fallback.is_empty() {
+        "session".to_string()
+    } else {
+        fallback
+    }
 }
 
 fn sanitize_file_name(input: &str) -> String {
@@ -1154,6 +1234,7 @@ mod tests {
                 id: Some("u1".to_string()),
                 role: Some("user".to_string()),
                 content: Some("question".to_string()),
+                reasoning_content: None,
                 content_list: vec![],
                 model: None,
                 model_name: None,
@@ -1172,6 +1253,7 @@ mod tests {
                     id: Some(id.to_string()),
                     role: Some("assistant".to_string()),
                     content: Some(format!("answer-{id}")),
+                    reasoning_content: None,
                     content_list: vec![],
                     model: None,
                     model_name: None,
@@ -1208,5 +1290,31 @@ mod tests {
         };
 
         assert_eq!(detect_tags(&session), vec!["chat/t2t"]);
+    }
+
+    #[test]
+    fn assistant_thinking_is_rendered_into_thought_section() {
+        let assistant = MessageNode {
+            id: Some("a1".to_string()),
+            role: Some("assistant".to_string()),
+            content: Some("final answer".to_string()),
+            reasoning_content: Some(serde_json::json!({
+                "summary_thought": { "content": ["first think", "second think"] }
+            })),
+            content_list: vec![],
+            model: None,
+            model_name: None,
+            parent_id: None,
+            children_ids: vec![],
+            timestamp: None,
+            chat_type: None,
+            sub_chat_type: None,
+        };
+
+        let rendered = extract_assistant_content(&assistant);
+        assert!(rendered.contains("#### 🤔 Thought Process"));
+        assert!(rendered.contains("first think"));
+        assert!(rendered.contains("#### 💡 Response"));
+        assert!(rendered.contains("final answer"));
     }
 }

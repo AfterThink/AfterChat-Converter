@@ -41,6 +41,14 @@ This tool converts Qwen-like JSON conversation exports into Markdown files follo
 - `### Run Settings`
 - `## Conversation`
 
+## File naming
+- Single-session output:
+  - preferred: sanitized session `title`
+  - fallback: sanitized session `id`
+  - final fallback: source file stem
+- Wrapped split output:
+  - `{index:04}-{sanitized_title_or_id}.md`
+
 ## Metadata fields
 - `Model`
 - `Tags` (normalized)

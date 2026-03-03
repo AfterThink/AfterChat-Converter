@@ -3,8 +3,6 @@ use std::fs;
 use assert_cmd::Command;
 use tempfile::tempdir;
 
-const CHATFORMAT: &str = "# format\n\n## Conversation\n";
-
 fn small_session_json(question: &str, answer: &str) -> String {
     format!(
         r#"[{{
@@ -43,7 +41,6 @@ fn converts_single_json_to_markdown() {
     let in_dir = tmp.path().join("in");
     let out_dir = tmp.path().join("out");
     fs::create_dir_all(&in_dir).expect("create input dir");
-    fs::write(in_dir.join("chatformat.txt"), CHATFORMAT).expect("write chatformat");
     fs::write(
         in_dir.join("small.json"),
         small_session_json("hello?", "world!"),
@@ -62,7 +59,7 @@ fn converts_single_json_to_markdown() {
         .assert()
         .success();
 
-    let output_md = out_dir.join("small.md");
+    let output_md = out_dir.join("demo.md");
     assert!(output_md.exists());
     let text = fs::read_to_string(output_md).expect("read output markdown");
     assert!(text.contains("## Conversation"));
@@ -77,7 +74,6 @@ fn wrapped_large_json_splits_into_many_files() {
     let in_dir = tmp.path().join("in");
     let out_dir = tmp.path().join("out");
     fs::create_dir_all(&in_dir).expect("create input dir");
-    fs::write(in_dir.join("chatformat.txt"), CHATFORMAT).expect("write chatformat");
 
     let item1 = serde_json::from_str::<serde_json::Value>(&small_session_json("q1", "a1"))
         .expect("valid json array")[0]
@@ -133,7 +129,6 @@ fn directory_mode_preserves_output_tree() {
     let sub_dir = in_dir.join("sub");
     fs::create_dir_all(&a_dir).expect("create a dir");
     fs::create_dir_all(&sub_dir).expect("create sub dir");
-    fs::write(in_dir.join("chatformat.txt"), CHATFORMAT).expect("write chatformat");
     fs::write(
         a_dir.join("one.json"),
         small_session_json("question one", "answer one"),
@@ -157,8 +152,8 @@ fn directory_mode_preserves_output_tree() {
         .assert()
         .success();
 
-    assert!(out_dir.join("a").join("one.md").exists());
-    assert!(out_dir.join("sub").join("two.md").exists());
+    assert!(out_dir.join("a").join("demo.md").exists());
+    assert!(out_dir.join("sub").join("demo.md").exists());
 }
 
 #[test]
@@ -166,7 +161,6 @@ fn drag_drop_style_invocation_works() {
     let tmp = tempdir().expect("create temp dir");
     let in_dir = tmp.path().join("in");
     fs::create_dir_all(&in_dir).expect("create input dir");
-    fs::write(in_dir.join("chatformat.txt"), CHATFORMAT).expect("write chatformat");
     let source = in_dir.join("drag.json");
     fs::write(&source, small_session_json("drag q", "drag a")).expect("write drag json");
 
@@ -176,5 +170,5 @@ fn drag_drop_style_invocation_works() {
         .assert()
         .success();
 
-    assert!(in_dir.join("drag.md").exists());
+    assert!(in_dir.join("demo.md").exists());
 }

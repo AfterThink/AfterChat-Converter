@@ -46,6 +46,9 @@ cargo run -- examples/small.json
   - `## Metadata`
   - `### Run Settings`
   - `## Conversation`
+- 文件命名：
+  - 单会话默认优先使用会话 `title` 作为文件名（非法字符自动清理）
+  - 若 `title` 缺失则回退到会话 `id`，再回退到源文件名
 - 消息头：
   - `### 🧑‍💻 User`
   - `### 🤖 Assistant`
