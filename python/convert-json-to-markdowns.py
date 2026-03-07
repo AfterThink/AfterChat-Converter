@@ -119,6 +119,10 @@ def convert_json_to_markdown(json_file_path, output_dir="conversations"):
         safe_name = sanitize_filename(topic_name)
         if not safe_name.strip():
             safe_name = "Untitled_Conversation"
+
+        safe_assistant_name = sanitize_filename(assistant_name).strip()
+        if not safe_assistant_name:
+            safe_assistant_name = "Assistant"
             
         # 格式要求 1: 标题
         md_content = f"Conversation Transcript: {safe_name}\n\n"
@@ -193,7 +197,10 @@ def convert_json_to_markdown(json_file_path, output_dir="conversations"):
                          md_content += f"{content}\n\n"
 
         # 写入文件
-        file_path = os.path.join(output_dir, f"{safe_name}.md")
+        assistant_output_dir = os.path.join(output_dir, safe_assistant_name)
+        os.makedirs(assistant_output_dir, exist_ok=True)
+
+        file_path = os.path.join(assistant_output_dir, f"{safe_name}.md")
             
         try:
             with open(file_path, 'w', encoding='utf-8') as f:

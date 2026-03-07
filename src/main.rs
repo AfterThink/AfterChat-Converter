@@ -127,6 +127,15 @@ fn sanitize_filename(filename: &str) -> String {
     re.replace_all(filename, "").to_string()
 }
 
+fn sanitize_path_component(name: &str, fallback: &str) -> String {
+    let sanitized = sanitize_filename(name).trim().to_string();
+    if sanitized.is_empty() || sanitized == "." || sanitized == ".." {
+        fallback.to_string()
+    } else {
+        sanitized
+    }
+}
+
 fn get_created_at_f64(v: &Option<Value>) -> f64 {
     match v {
         Some(Value::Number(n)) => n.as_f64().unwrap_or(0.0),
@@ -358,7 +367,14 @@ fn main() -> Result<()> {
             }
         }
 
-        let file_path = output_dir.join(format!("{}.md", safe_name));
+        let safe_assistant_name = sanitize_path_component(assistant_name, "Assistant");
+        let assistant_dir = output_dir.join(&safe_assistant_name);
+        if let Err(e) = fs::create_dir_all(&assistant_dir) {
+            println!("创建助手目录失败 {:?}: {}", assistant_dir, e);
+            return;
+        }
+
+        let file_path = assistant_dir.join(format!("{}.md", safe_name));
         
         if let Ok(mut f) = File::create(&file_path) {
             if let Err(e) = f.write_all(md_content.as_bytes()) {
