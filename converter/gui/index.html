@@ -16,8 +16,7 @@
             <button class="icon-btn" id="btn-help" title="Help">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
             </button>
-            <button class="icon-btn" id="btn-lang" title="Switch Language">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <button class="icon-btn lang-btn" id="btn-lang" title="Switch Language" aria-label="Switch Language">
               <span id="current-lang" class="lang-text">EN</span>
             </button>
           </div>
@@ -50,16 +49,16 @@
             <span id="i18n-reveal">Reveal</span>
           </button>
           
-          <details class="error-details hidden" id="details-panel">
-            <summary>Error Details</summary>
+          <div class="error-panel hidden" id="details-panel" role="alert">
+            <div class="error-heading" id="i18n-error-title">Why it failed</div>
             <pre id="details-text"></pre>
-          </details>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Help Modal -->
-    <div id="help-modal" class="modal-overlay hidden">
+    <div id="help-modal" class="modal-overlay" aria-hidden="true">
       <div class="modal-content">
         <button class="modal-close" id="modal-close">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>

@@ -5,10 +5,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tauri::api::process::{Command, CommandEvent};
 use tauri::Manager;
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum ConverterKind {
     AiStudio,
@@ -30,6 +31,7 @@ struct InputInfo {
     path: String,
     name: String,
     is_dir: bool,
+    converter_kind: Option<ConverterKind>,
 }
 
 #[derive(Debug, Serialize)]
@@ -54,10 +56,26 @@ fn inspect_input(path: String) -> Result<InputInfo, String> {
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| input_path.display().to_string());
 
+    let converter_kind = if metadata.is_dir() {
+        if !directory_contains_json(&input_path)
+            .map_err(|error| format!("无法读取目录 {}: {error}", input_path.display()))?
+        {
+            return Err(format!(
+                "目录中没有可转换的 JSON 文件：{}",
+                input_path.display()
+            ));
+        }
+
+        Some(ConverterKind::Qwen)
+    } else {
+        Some(detect_converter_kind_from_file(&input_path)?)
+    };
+
     Ok(InputInfo {
         path,
         name,
         is_dir: metadata.is_dir(),
+        converter_kind,
     })
 }
 
@@ -199,6 +217,95 @@ fn predict_output_path(
             }
         }
     }
+}
+
+fn detect_converter_kind_from_file(path: &Path) -> Result<ConverterKind, String> {
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase());
+
+    if extension.as_deref() != Some("json") {
+        return Err(format!(
+            "仅支持 JSON 导出文件，当前文件不是 JSON：{}",
+            path.display()
+        ));
+    }
+
+    let bytes =
+        fs::read(path).map_err(|error| format!("无法读取输入文件 {}: {error}", path.display()))?;
+    let value: Value = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("文件不是有效的 JSON：{} ({error})", path.display()))?;
+
+    detect_converter_kind(&value).ok_or_else(|| {
+        format!(
+            "暂不支持这个 JSON 导出格式：{}。当前支持 Google AI Studio、Cherry Studio、Qwen。",
+            path.display()
+        )
+    })
+}
+
+fn detect_converter_kind(value: &Value) -> Option<ConverterKind> {
+    match value {
+        Value::Object(obj) => {
+            if obj.contains_key("indexedDB") || obj.contains_key("localStorage") {
+                return Some(ConverterKind::Cherry);
+            }
+
+            if obj.contains_key("runSettings")
+                || obj.contains_key("chunkedPrompt")
+                || obj.contains_key("systemInstruction")
+            {
+                return Some(ConverterKind::AiStudio);
+            }
+
+            if obj.get("data").is_some_and(Value::is_array)
+                || obj.contains_key("chat")
+                || obj.contains_key("messages")
+                || obj.contains_key("meta")
+                || obj.contains_key("chat_type")
+                || obj.contains_key("sub_chat_type")
+            {
+                return Some(ConverterKind::Qwen);
+            }
+
+            None
+        }
+        Value::Array(items) => {
+            if items.iter().all(|item| item.is_object() || item.is_null()) {
+                Some(ConverterKind::Qwen)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn directory_contains_json(path: &Path) -> std::io::Result<bool> {
+    let mut stack = vec![path.to_path_buf()];
+
+    while let Some(current) = stack.pop() {
+        for entry in fs::read_dir(current)? {
+            let entry = entry?;
+            let entry_path = entry.path();
+
+            if entry.file_type()?.is_dir() {
+                stack.push(entry_path);
+                continue;
+            }
+
+            if entry_path
+                .extension()
+                .and_then(|value| value.to_str())
+                .is_some_and(|value| value.eq_ignore_ascii_case("json"))
+            {
+                return Ok(true);
+            }
+        }
+    }
+
+    Ok(false)
 }
 
 fn reveal_path(target: &Path) -> std::io::Result<()> {

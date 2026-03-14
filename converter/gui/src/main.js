@@ -28,6 +28,9 @@ const i18n = {
     processing: "Processing...",
     success: "Done",
     error: "Failed",
+    errorTitle: "Why it failed",
+    switchToZh: "Switch to Chinese",
+    switchToEn: "Switch to English",
     aboutDesc: "A simple tool to convert conversation history JSON files to Markdown.",
     supportedFormats: "Supported Formats:"
   },
@@ -39,14 +42,13 @@ const i18n = {
     processing: "处理中...",
     success: "完成",
     error: "失败",
+    errorTitle: "失败原因",
+    switchToZh: "切换到中文",
+    switchToEn: "切换到英文",
     aboutDesc: "一个简单的工具，用于将对话历史 JSON 文件转换为 Markdown。",
     supportedFormats: "支持的格式："
   }
 };
-
-// 获取系统语言
-const lang = navigator.language.startsWith("zh") ? "zh" : "en";
-const t = i18n[lang];
 
 const ICONS = {
   ready: `
@@ -73,6 +75,7 @@ const state = {
   phase: "ready",
   isBusy: false,
   revealPath: "",
+  errorMessage: "",
   resetTimer: null,
   outputBesideSource: loadOutputMode(),
   lang: loadLang(),
@@ -99,6 +102,7 @@ const elements = {
   appVersion: document.querySelector("#app-version"),
   aboutDesc: document.querySelector("#i18n-about-desc"),
   supportedFormats: document.querySelector("#i18n-supported-formats"),
+  errorTitle: document.querySelector("#i18n-error-title"),
   btnClose: document.querySelector("#btn-close"),
   dragRegions: document.querySelectorAll("[data-window-drag]"),
 };
@@ -112,12 +116,24 @@ function getT() {
 function updateI18nUI() {
   const t = getT();
   elements.inplaceLabel.textContent = t.inplace;
-  elements.hintLabel.textContent = t.hint;
   elements.revealLabel.textContent = t.reveal;
-  elements.currentLangText.textContent = state.lang.toUpperCase();
+  elements.errorTitle.textContent = t.errorTitle;
+  elements.currentLangText.textContent = state.lang === "zh" ? "中" : "EN";
+  elements.btnLang.title = state.lang === "zh" ? t.switchToEn : t.switchToZh;
+  elements.btnLang.setAttribute("aria-label", elements.btnLang.title);
   // Update modal texts
   if (elements.aboutDesc) elements.aboutDesc.textContent = t.aboutDesc;
   if (elements.supportedFormats) elements.supportedFormats.textContent = t.supportedFormats;
+}
+
+function openHelpModal() {
+  elements.helpModal.classList.add("is-open");
+  elements.helpModal.setAttribute("aria-hidden", "false");
+}
+
+function closeHelpModal() {
+  elements.helpModal.classList.remove("is-open");
+  elements.helpModal.setAttribute("aria-hidden", "true");
 }
 
 // 语言切换逻辑
@@ -139,16 +155,22 @@ elements.btnClose.addEventListener("click", async () => {
 
 // 帮助逻辑
 elements.btnHelp.addEventListener("click", () => {
-  elements.helpModal.classList.remove("hidden");
+  openHelpModal();
 });
 
 elements.modalClose.addEventListener("click", () => {
-  elements.helpModal.classList.add("hidden");
+  closeHelpModal();
 });
 
 elements.helpModal.addEventListener("click", (e) => {
   if (e.target === elements.helpModal) {
-    elements.helpModal.classList.add("hidden");
+    closeHelpModal();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && elements.helpModal.classList.contains("is-open")) {
+    closeHelpModal();
   }
 });
 
@@ -174,6 +196,26 @@ function bindWindowDragging() {
       }
     });
   }
+}
+
+function normalizeErrorMessage(error) {
+  if (!error) return "Unknown error";
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.message;
+
+  try {
+    return JSON.stringify(error, null, 2);
+  } catch (_) {
+    return String(error);
+  }
+}
+
+function showError(message) {
+  state.isBusy = false;
+  state.phase = "error";
+  state.revealPath = "";
+  state.errorMessage = message;
+  render();
 }
 
 function loadLang() {
@@ -227,20 +269,21 @@ async function handleDrop(paths) {
   clearResetTimer();
 
   const targetPath = paths[0];
+  state.isBusy = true;
+  state.revealPath = "";
+  state.errorMessage = "";
+  state.phase = "processing";
+  render();
 
   try {
     const input = await invoke("inspect_input", { path: targetPath });
-    const converter = selectConverter(input);
+    const converter = input.converterKind || selectConverter(input);
     
     const outputPath = await resolveOutputPath(input, converter);
     if (outputPath === null) {
       resetToReady();
       return;
     }
-
-    state.isBusy = true;
-    state.phase = "processing";
-    render();
 
     const result = await invoke("run_conversion", {
       request: {
@@ -251,24 +294,17 @@ async function handleDrop(paths) {
     });
 
     state.isBusy = false;
-    state.revealPath = result.outputPath;
 
     if (result.exitCode === 0) {
+      state.revealPath = result.outputPath;
       state.phase = "success";
       render();
       scheduleReset();
     } else {
-      state.phase = "error";
-      state.detailsText.textContent = [result.stderr, result.stdout].filter(Boolean).join("\n");
-      render();
-      scheduleReset();
+      showError([result.stderr, result.stdout].filter(Boolean).join("\n") || "Conversion failed.");
     }
   } catch (error) {
-    state.isBusy = false;
-    state.phase = "error";
-    state.detailsText.textContent = String(error);
-    render();
-    scheduleReset();
+    showError(normalizeErrorMessage(error));
   }
 }
 
@@ -320,6 +356,7 @@ function resetToReady() {
   state.isBusy = false;
   state.phase = "ready";
   state.revealPath = "";
+  state.errorMessage = "";
   render();
 }
 
@@ -344,7 +381,8 @@ function render() {
   else if (state.phase === "success") elements.hintLabel.textContent = t.success;
   else if (state.phase === "error") elements.hintLabel.textContent = t.error;
 
-  elements.detailsPanel.classList.toggle("hidden", state.phase !== "error");
+  elements.detailsText.textContent = state.errorMessage;
+  elements.detailsPanel.classList.toggle("hidden", state.phase !== "error" || !state.errorMessage);
   elements.revealButton.classList.toggle("hidden", state.phase !== "success" || !state.revealPath);
 }
 
