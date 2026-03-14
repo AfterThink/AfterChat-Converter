@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = [
+    "converter/cherry",
+    "converter/ai-studio",
+    "converter/qwen",
+]
