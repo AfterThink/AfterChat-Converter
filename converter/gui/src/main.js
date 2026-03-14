@@ -95,7 +95,6 @@ const elements = {
   // 新按钮
   btnHelp: document.querySelector("#btn-help"),
   btnLang: document.querySelector("#btn-lang"),
-  currentLangText: document.querySelector("#current-lang"),
   // Modal elements
   helpModal: document.querySelector("#help-modal"),
   modalClose: document.querySelector("#modal-close"),
@@ -118,7 +117,7 @@ function updateI18nUI() {
   elements.inplaceLabel.textContent = t.inplace;
   elements.revealLabel.textContent = t.reveal;
   elements.errorTitle.textContent = t.errorTitle;
-  elements.currentLangText.textContent = state.lang === "zh" ? "中" : "EN";
+  elements.btnLang.dataset.lang = state.lang;
   elements.btnLang.title = state.lang === "zh" ? t.switchToEn : t.switchToZh;
   elements.btnLang.setAttribute("aria-label", elements.btnLang.title);
   // Update modal texts
@@ -172,6 +171,10 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && elements.helpModal.classList.contains("is-open")) {
     closeHelpModal();
   }
+});
+
+document.addEventListener("contextmenu", (event) => {
+  event.preventDefault();
 });
 
 // 获取版本号

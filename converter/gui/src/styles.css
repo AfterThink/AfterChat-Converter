@@ -186,16 +186,69 @@ body {
   margin: 0 4px;
 }
 
-.lang-text {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+.lang-switch {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  min-width: 56px;
+  height: 30px;
+  padding: 3px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.05);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
 }
 
-.lang-btn {
-  min-width: 40px;
-  justify-content: center;
-  padding-inline: 10px;
+.lang-switch::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.96);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+  transition: transform var(--transition-spring);
+}
+
+.lang-switch[data-lang="en"]::before {
+  transform: translateX(100%);
+}
+
+.lang-switch:hover {
+  background: rgba(0,0,0,0.075);
+  transform: translateY(-1px);
+}
+
+.lang-switch:active {
+  transform: translateY(0);
+}
+
+.lang-option {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
+.lang-switch[data-lang="zh"] .lang-option-zh,
+.lang-switch[data-lang="en"] .lang-option-en {
+  color: var(--text-primary);
+}
+
+.lang-switch[data-lang="zh"] .lang-option-en,
+.lang-switch[data-lang="en"] .lang-option-zh {
+  color: var(--text-secondary);
 }
 
 /* Toggle Switch */
@@ -268,6 +321,10 @@ input:checked + .slider::after {
     transform var(--transition-spring),
     color var(--transition-fast),
     filter var(--transition-smooth);
+}
+
+[data-phase="ready"] .state-icon-wrapper {
+  animation: idle-breathe 3.6s ease-in-out infinite;
 }
 
 /* State Icon Colors */
@@ -528,6 +585,15 @@ input:checked + .slider::after {
   }
 }
 
+@keyframes idle-breathe {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-4px) scale(1.02);
+  }
+}
+
 /* Dark Mode Support (optional, based on system pref) */
 @media (prefers-color-scheme: dark) {
   :root {
@@ -551,6 +617,9 @@ input:checked + .slider::after {
   
   .slider { background-color: #3a3a3c; }
   .icon-btn:hover { background-color: rgba(255,255,255,0.1); }
+  .lang-switch { background: rgba(255,255,255,0.08); }
+  .lang-switch::before { background: rgba(255,255,255,0.96); }
+  .lang-switch:hover { background: rgba(255,255,255,0.12); }
   .action-btn { background-color: #fff; color: #000; }
   .action-btn:hover { background-color: #f2f2f7; }
   .error-panel { background: linear-gradient(180deg, #3c2222 0%, #341b1b 100%); border-color: #5a3232; }
