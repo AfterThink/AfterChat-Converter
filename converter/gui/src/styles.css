@@ -186,69 +186,33 @@ body {
   margin: 0 4px;
 }
 
-.lang-switch {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  align-items: center;
-  min-width: 56px;
+.lang-badge {
+  min-width: 42px;
   height: 30px;
-  padding: 3px;
-  border: none;
+  justify-content: center;
+  padding-inline: 10px;
+  border: 1px solid rgba(0,0,0,0.08);
   border-radius: 999px;
-  background: rgba(0,0,0,0.05);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition:
-    background-color var(--transition-fast),
-    box-shadow var(--transition-fast),
-    transform var(--transition-fast);
+  background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(245,245,247,0.96) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.75),
+    0 4px 12px rgba(0,0,0,0.05);
 }
 
-.lang-switch::before {
-  content: "";
-  position: absolute;
-  top: 3px;
-  bottom: 3px;
-  left: 3px;
-  width: calc(50% - 3px);
-  border-radius: 999px;
-  background: rgba(255,255,255,0.96);
-  box-shadow: 0 6px 14px rgba(0,0,0,0.08);
-  transition: transform var(--transition-spring);
+.lang-badge:hover {
+  border-color: rgba(0, 113, 227, 0.2);
+  color: var(--accent-color);
+  background: linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(244,249,255,1) 100%);
 }
 
-.lang-switch[data-lang="en"]::before {
-  transform: translateX(100%);
-}
-
-.lang-switch:hover {
-  background: rgba(0,0,0,0.075);
-  transform: translateY(-1px);
-}
-
-.lang-switch:active {
-  transform: translateY(0);
-}
-
-.lang-option {
-  position: relative;
-  z-index: 1;
+.lang-badge-text {
+  display: inline-block;
+  min-width: 2ch;
   text-align: center;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   user-select: none;
-}
-
-.lang-switch[data-lang="zh"] .lang-option-zh,
-.lang-switch[data-lang="en"] .lang-option-en {
-  color: var(--text-primary);
-}
-
-.lang-switch[data-lang="zh"] .lang-option-en,
-.lang-switch[data-lang="en"] .lang-option-zh {
-  color: var(--text-secondary);
 }
 
 /* Toggle Switch */
@@ -257,6 +221,33 @@ body {
   align-items: center;
   gap: var(--spacing-sm);
   cursor: pointer;
+}
+
+.content-toggle {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(249,249,251,0.96) 0%, rgba(244,244,246,0.96) 100%);
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.8),
+    0 6px 16px rgba(0,0,0,0.05);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.content-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.9),
+    0 10px 18px rgba(0,0,0,0.06);
+}
+
+.content-toggle.is-disabled {
+  opacity: 0.55;
+  transform: none;
+  pointer-events: none;
 }
 
 .toggle-label {
@@ -357,6 +348,12 @@ input:checked + .slider::after {
 [data-phase="hovering"] .status-text { color: var(--accent-color); }
 [data-phase="success"] .status-text { color: var(--success-color); }
 [data-phase="error"] .status-text { color: var(--error-color); }
+
+.content-options {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+}
 
 /* Footer */
 .card-footer {
@@ -617,9 +614,24 @@ input:checked + .slider::after {
   
   .slider { background-color: #3a3a3c; }
   .icon-btn:hover { background-color: rgba(255,255,255,0.1); }
-  .lang-switch { background: rgba(255,255,255,0.08); }
-  .lang-switch::before { background: rgba(255,255,255,0.96); }
-  .lang-switch:hover { background: rgba(255,255,255,0.12); }
+  .lang-badge {
+    background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%);
+    border-color: rgba(255,255,255,0.1);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.08),
+      0 6px 12px rgba(0,0,0,0.16);
+  }
+  .lang-badge:hover {
+    background: linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(18,111,216,0.18) 100%);
+    border-color: rgba(85, 170, 255, 0.28);
+  }
+  .content-toggle {
+    background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%);
+    border-color: rgba(255,255,255,0.08);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.06),
+      0 8px 16px rgba(0,0,0,0.12);
+  }
   .action-btn { background-color: #fff; color: #000; }
   .action-btn:hover { background-color: #f2f2f7; }
   .error-panel { background: linear-gradient(180deg, #3c2222 0%, #341b1b 100%); border-color: #5a3232; }

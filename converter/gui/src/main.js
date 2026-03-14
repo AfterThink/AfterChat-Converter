@@ -35,7 +35,7 @@ const i18n = {
     supportedFormats: "Supported Formats:"
   },
   zh: {
-    inplace: "原位生成",
+    inplace: "同目录输出",
     hint: "拖拽文件至此",
     reveal: "打开位置",
     selecting: "选择保存位置...",
@@ -95,6 +95,7 @@ const elements = {
   // 新按钮
   btnHelp: document.querySelector("#btn-help"),
   btnLang: document.querySelector("#btn-lang"),
+  currentLangText: document.querySelector("#current-lang"),
   // Modal elements
   helpModal: document.querySelector("#help-modal"),
   modalClose: document.querySelector("#modal-close"),
@@ -104,6 +105,7 @@ const elements = {
   errorTitle: document.querySelector("#i18n-error-title"),
   btnClose: document.querySelector("#btn-close"),
   dragRegions: document.querySelectorAll("[data-window-drag]"),
+  outputPreference: document.querySelector("#output-preference"),
 };
 
 // 获取翻译
@@ -117,7 +119,7 @@ function updateI18nUI() {
   elements.inplaceLabel.textContent = t.inplace;
   elements.revealLabel.textContent = t.reveal;
   elements.errorTitle.textContent = t.errorTitle;
-  elements.btnLang.dataset.lang = state.lang;
+  elements.currentLangText.textContent = state.lang === "zh" ? "中" : "EN";
   elements.btnLang.title = state.lang === "zh" ? t.switchToEn : t.switchToZh;
   elements.btnLang.setAttribute("aria-label", elements.btnLang.title);
   // Update modal texts
@@ -387,6 +389,8 @@ function render() {
   elements.detailsText.textContent = state.errorMessage;
   elements.detailsPanel.classList.toggle("hidden", state.phase !== "error" || !state.errorMessage);
   elements.revealButton.classList.toggle("hidden", state.phase !== "success" || !state.revealPath);
+  elements.outputToggle.disabled = state.isBusy;
+  elements.outputPreference.classList.toggle("is-disabled", state.isBusy);
 }
 
 updateI18nUI();
