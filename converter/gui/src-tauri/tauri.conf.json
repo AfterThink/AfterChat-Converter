@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/1",
   "build": {
-    "beforeBuildCommand": "bun run build:tauri",
-    "beforeDevCommand": "bun run dev:tauri",
-    "devPath": "http://127.0.0.1:1420",
-    "distDir": "../dist",
-    "withGlobalTauri": false
+    "beforeBuildCommand": "bun run prepare:sidecars:release",
+    "beforeDevCommand": "bun run prepare:sidecars",
+    "devPath": "..",
+    "distDir": "..",
+    "withGlobalTauri": true
   },
   "package": {
     "productName": "Converters",

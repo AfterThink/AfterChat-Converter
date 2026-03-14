@@ -1,6 +1,7 @@
-import { open as openDialog, save } from "@tauri-apps/api/dialog";
-import { invoke } from "@tauri-apps/api/tauri";
-import { appWindow } from "@tauri-apps/api/window";
+// 使用 window.__TAURI__ 获取 API，不再依赖 Vite 模块打包
+const { open: openDialog, save } = window.__TAURI__.dialog;
+const { invoke } = window.__TAURI__.tauri;
+const { appWindow } = window.__TAURI__.window;
 
 const STORAGE_KEY = "converters.inline-output";
 const AUTO_RESET_MS = 4200;
