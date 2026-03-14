@@ -308,6 +308,20 @@ input:checked + .slider::after {
     filter var(--transition-smooth);
 }
 
+.state-icon-wrapper.is-clickable {
+  cursor: pointer;
+}
+
+.state-icon-wrapper.is-clickable:hover {
+  filter: drop-shadow(0 10px 22px rgba(0, 113, 227, 0.16));
+}
+
+.state-icon-wrapper.is-clickable:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 6px rgba(0, 113, 227, 0.12);
+  border-radius: 18px;
+}
+
 [data-phase="ready"] .state-icon-wrapper {
   animation: idle-breathe 3.6s ease-in-out infinite;
 }

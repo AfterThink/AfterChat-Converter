@@ -24,6 +24,7 @@ const i18n = {
     inplace: "In-place",
     hint: "Drop files here",
     reveal: "Reveal",
+    chooseInput: "Select input file",
     selecting: "Select destination...",
     processing: "Processing...",
     success: "Done",
@@ -38,6 +39,7 @@ const i18n = {
     inplace: "同目录输出",
     hint: "拖拽文件至此",
     reveal: "打开位置",
+    chooseInput: "选择输入文件",
     selecting: "选择保存位置...",
     processing: "处理中...",
     success: "完成",
@@ -122,6 +124,8 @@ function updateI18nUI() {
   elements.currentLangText.textContent = state.lang === "zh" ? "中" : "EN";
   elements.btnLang.title = state.lang === "zh" ? t.switchToEn : t.switchToZh;
   elements.btnLang.setAttribute("aria-label", elements.btnLang.title);
+  elements.icon.title = t.chooseInput;
+  elements.icon.setAttribute("aria-label", t.chooseInput);
   // Update modal texts
   if (elements.aboutDesc) elements.aboutDesc.textContent = t.aboutDesc;
   if (elements.supportedFormats) elements.supportedFormats.textContent = t.supportedFormats;
@@ -203,6 +207,23 @@ function bindWindowDragging() {
   }
 }
 
+async function pickInputFile() {
+  if (state.isBusy) return;
+  clearResetTimer();
+
+  const picked = await openDialog({
+    multiple: false,
+    directory: false,
+    title: getT().chooseInput,
+    filters: [{ name: "JSON", extensions: ["json"] }],
+  });
+
+  const selectedPath = Array.isArray(picked) ? picked[0] : picked;
+  if (!selectedPath) return;
+
+  await handleDrop([selectedPath]);
+}
+
 function normalizeErrorMessage(error) {
   if (!error) return "Unknown error";
   if (typeof error === "string") return error;
@@ -214,6 +235,17 @@ function normalizeErrorMessage(error) {
     return String(error);
   }
 }
+
+elements.icon.addEventListener("click", async () => {
+  await pickInputFile();
+});
+
+elements.icon.addEventListener("keydown", async (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+
+  event.preventDefault();
+  await pickInputFile();
+});
 
 function showError(message) {
   state.isBusy = false;
@@ -391,6 +423,9 @@ function render() {
   elements.revealButton.classList.toggle("hidden", state.phase !== "success" || !state.revealPath);
   elements.outputToggle.disabled = state.isBusy;
   elements.outputPreference.classList.toggle("is-disabled", state.isBusy);
+  elements.icon.classList.toggle("is-clickable", !state.isBusy);
+  elements.icon.tabIndex = state.isBusy ? -1 : 0;
+  elements.icon.setAttribute("aria-disabled", String(state.isBusy));
 }
 
 updateI18nUI();
