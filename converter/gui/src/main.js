@@ -1,160 +1,142 @@
-// 使用 window.__TAURI__ 获取 API，不再依赖 Vite 模块打包
+// 使用 window.__TAURI__ 获取 API
 const { open: openDialog, save } = window.__TAURI__.dialog;
 const { invoke } = window.__TAURI__.tauri;
 const { appWindow } = window.__TAURI__.window;
 
-const STORAGE_KEY = "converters.inline-output";
-const AUTO_RESET_MS = 4200;
+const STORAGE_KEY = "converters.output-mode";
+
+// i18n 配置
+const i18n = {
+  en: {
+    inplace: "In-place",
+    hint: "Drop files here",
+    reveal: "Reveal",
+    selecting: "Select destination...",
+    processing: "Processing...",
+    success: "Done",
+    error: "Failed"
+  },
+  zh: {
+    inplace: "原位生成",
+    hint: "拖拽文件至此",
+    reveal: "打开位置",
+    selecting: "选择保存位置...",
+    processing: "处理中...",
+    success: "完成",
+    error: "失败"
+  }
+};
+
+// 获取系统语言
+const lang = navigator.language.startsWith("zh") ? "zh" : "en";
+const t = i18n[lang];
 
 const ICONS = {
   ready: `
-    <svg viewBox="0 0 48 48" aria-hidden="true">
-      <path d="M24 8v18"></path>
-      <path d="M16 20l8 8 8-8"></path>
-      <path d="M11 34h26"></path>
-    </svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
   `,
   hovering: `
-    <svg viewBox="0 0 48 48" aria-hidden="true">
-      <path d="M24 9v20"></path>
-      <path d="M14 21l10 10 10-10"></path>
-      <path d="M12 37h24"></path>
-    </svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
   `,
   selecting: `
-    <svg viewBox="0 0 48 48" aria-hidden="true">
-      <path d="M8 16h12l4 4h16v14a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4z"></path>
-      <path d="M8 16a4 4 0 0 1 4-4h8l4 4"></path>
-    </svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
   `,
   processing: `
-    <svg viewBox="0 0 48 48" aria-hidden="true">
-      <path d="M24 9a15 15 0 1 1-10.6 4.4"></path>
-      <path d="M24 9v7"></path>
-    </svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
   `,
   success: `
-    <svg viewBox="0 0 48 48" aria-hidden="true">
-      <path d="M14 25l7 7 13-15"></path>
-      <circle cx="24" cy="24" r="15"></circle>
-    </svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
   `,
   error: `
-    <svg viewBox="0 0 48 48" aria-hidden="true">
-      <circle cx="24" cy="24" r="15"></circle>
-      <path d="M19 19l10 10"></path>
-      <path d="M29 19L19 29"></path>
-    </svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
   `,
-};
-
-const PHASE_COPY = {
-  ready: {
-    eyebrow: "等待文件",
-    title: "将文件或文件夹拖拽至此",
-    description: "松手后立即开始转换，不需要额外按钮。",
-  },
-  hovering: {
-    eyebrow: "准备接收",
-    title: "松手即可开始",
-    description: "我会根据名称自动选择合适的转换器。",
-  },
-  selecting: {
-    eyebrow: "等待路径",
-    title: "请选择保存位置",
-    description: "一旦确认路径，就会立刻开始处理。",
-  },
-  processing: {
-    eyebrow: "处理中",
-    title: "正在转换…",
-    description: "请稍等，我正在调用对应的后端转换器。",
-  },
-  success: {
-    eyebrow: "转换完成",
-    title: "已成功生成输出",
-    description: "你可以直接打开输出位置继续查看结果。",
-  },
-  error: {
-    eyebrow: "转换失败",
-    title: "这次没有完成",
-    description: "可展开查看错误详情，然后重试。",
-  },
-};
-
-const converterLabels = {
-  "ai-studio": "Google AI Studio",
-  cherry: "Cherry Studio",
-  qwen: "Qwen",
 };
 
 const state = {
   phase: "ready",
-  outputBesideSource: loadOutputMode(),
-  statusLine: buildReadyStatusLine(loadOutputMode()),
-  detailText: "",
-  revealPath: "",
-  currentItem: "",
-  currentConverter: "",
-  resetTimer: null,
   isBusy: false,
+  revealPath: "",
+  resetTimer: null,
+  outputBesideSource: loadOutputMode(),
+  lang: loadLang(),
 };
 
 const elements = {
   card: document.querySelector("#drop-card"),
   icon: document.querySelector("#state-icon"),
-  eyebrow: document.querySelector("#eyebrow"),
-  title: document.querySelector("#title"),
-  description: document.querySelector("#description"),
-  metaPrimary: document.querySelector("#meta-primary"),
-  metaSecondary: document.querySelector("#meta-secondary"),
-  outputToggle: document.querySelector("#output-toggle"),
-  outputModeCopy: document.querySelector("#output-mode-copy"),
-  statusLine: document.querySelector("#status-line"),
   detailsPanel: document.querySelector("#details-panel"),
   detailsText: document.querySelector("#details-text"),
   revealButton: document.querySelector("#reveal-button"),
+  outputToggle: document.querySelector("#output-toggle"),
+  // i18n 元素
+  inplaceLabel: document.querySelector("#i18n-inplace"),
+  hintLabel: document.querySelector("#i18n-hint"),
+  revealLabel: document.querySelector("#i18n-reveal"),
+  // 新按钮
+  btnHelp: document.querySelector("#btn-help"),
+  btnLang: document.querySelector("#btn-lang"),
+  currentLangText: document.querySelector("#current-lang")
 };
 
-elements.outputToggle.checked = state.outputBesideSource;
-elements.outputToggle.addEventListener("change", (event) => {
-  state.outputBesideSource = event.currentTarget.checked;
-  localStorage.setItem(STORAGE_KEY, String(state.outputBesideSource));
+// 获取翻译
+function getT() {
+  return i18n[state.lang];
+}
 
-  if (!state.isBusy && state.phase === "ready") {
-    state.statusLine = buildReadyStatusLine(state.outputBesideSource);
-    render();
-  } else {
-    updateOutputModeCopy();
-  }
+// 初始化 i18n 文本
+function updateI18nUI() {
+  const t = getT();
+  elements.inplaceLabel.textContent = t.inplace;
+  elements.hintLabel.textContent = t.hint;
+  elements.revealLabel.textContent = t.reveal;
+  elements.currentLangText.textContent = state.lang.toUpperCase();
+}
+
+// 语言切换逻辑
+elements.btnLang.addEventListener("click", () => {
+  state.lang = state.lang === "zh" ? "en" : "zh";
+  localStorage.setItem("converters.lang", state.lang);
+  updateI18nUI();
+  render();
+});
+
+// 帮助逻辑
+elements.btnHelp.addEventListener("click", () => {
+  const msg = state.lang === "zh" 
+    ? "拖拽 JSON 文件到中心区域即可开始转换。\n\n支持的文件：\n- Google AI Studio 导出\n- Cherry Studio 备份\n- Qwen 格式" 
+    : "Drag JSON files to the center area to start.\n\nSupported files:\n- Google AI Studio exports\n- Cherry Studio backups\n- Qwen formats";
+  alert(msg);
+});
+
+function loadLang() {
+  const saved = localStorage.getItem("converters.lang");
+  if (saved) return saved;
+  return navigator.language.startsWith("zh") ? "zh" : "en";
+}
+
+// 初始化开关状态
+elements.outputToggle.checked = state.outputBesideSource;
+elements.outputToggle.addEventListener("change", (e) => {
+  state.outputBesideSource = e.target.checked;
+  localStorage.setItem(STORAGE_KEY, String(state.outputBesideSource));
 });
 
 elements.revealButton.addEventListener("click", async () => {
-  if (!state.revealPath) {
-    return;
-  }
-
-  try {
-    await invoke("reveal_in_file_manager", { path: state.revealPath });
-  } catch (error) {
-    state.statusLine = extractErrorMessage(error, "无法打开输出位置。");
-    render();
+  if (state.revealPath) {
+    try {
+      await invoke("reveal_in_file_manager", { path: state.revealPath });
+    } catch (e) {}
   }
 });
 
 appWindow.onFileDropEvent(async (event) => {
   const payload = event.payload;
-
-  if (state.isBusy && payload.type === "drop") {
-    state.statusLine = "当前仍在处理中，请等这一轮结束。";
-    render();
-    return;
-  }
+  if (state.isBusy && payload.type === "drop") return;
 
   if (payload.type === "hover") {
     clearResetTimer();
     if (!state.isBusy) {
       state.phase = "hovering";
-      state.statusLine = "松手后会立刻开始处理。";
       render();
     }
     return;
@@ -172,249 +154,131 @@ appWindow.onFileDropEvent(async (event) => {
   }
 });
 
-render();
-
 async function handleDrop(paths) {
+  if (!paths?.length) return;
   clearResetTimer();
 
-  if (!paths?.length) {
-    return;
-  }
-
   const targetPath = paths[0];
-  const ignoredCount = Math.max(paths.length - 1, 0);
 
   try {
     const input = await invoke("inspect_input", { path: targetPath });
     const converter = selectConverter(input);
-    const converterLabel = converterLabels[converter];
+    
     const outputPath = await resolveOutputPath(input, converter);
-
     if (outputPath === null) {
-      resetToReady("已取消选择保存位置。");
+      resetToReady();
       return;
     }
 
     state.isBusy = true;
     state.phase = "processing";
-    state.currentItem = input.name;
-    state.currentConverter = converterLabel;
-    state.detailText = "";
-    state.revealPath = "";
-    state.statusLine = ignoredCount
-      ? `使用 ${converterLabel} 处理 ${input.name}，其余 ${ignoredCount} 个项目已忽略。`
-      : `使用 ${converterLabel} 处理 ${input.name}。`;
     render();
 
     const result = await invoke("run_conversion", {
       request: {
         converter,
         inputPath: input.path,
-        outputPath,
+        outputPath: outputPath || undefined,
       },
     });
-
-    const mergedDetail = [result.stderr, result.stdout]
-      .filter(Boolean)
-      .join("\n")
-      .trim();
 
     state.isBusy = false;
     state.revealPath = result.outputPath;
 
     if (result.exitCode === 0) {
       state.phase = "success";
-      state.detailText = (result.stderr || "").trim();
-      state.statusLine = `${converterLabel} 已完成：${input.name}`;
       render();
       scheduleReset();
-      return;
+    } else {
+      state.phase = "error";
+      state.detailsText.textContent = [result.stderr, result.stdout].filter(Boolean).join("\n");
+      render();
+      scheduleReset();
     }
-
-    state.phase = "error";
-    state.detailText = mergedDetail;
-    state.statusLine =
-      mergedDetail || `${converterLabel} 返回了非零退出码 (${result.exitCode})。`;
-    render();
-    scheduleReset();
   } catch (error) {
     state.isBusy = false;
     state.phase = "error";
-    state.detailText = extractErrorMessage(error, "发生了未预期的错误。");
-    state.statusLine = state.detailText;
-    state.revealPath = "";
+    state.detailsText.textContent = String(error);
     render();
     scheduleReset();
   }
 }
 
 async function resolveOutputPath(input, converter) {
-  if (state.outputBesideSource) {
-    return undefined;
-  }
+  if (state.outputBesideSource) return undefined;
 
   state.phase = "selecting";
-  state.currentItem = input.name;
-  state.currentConverter = converterLabels[converter];
-  state.statusLine = `请为 ${input.name} 选择保存位置。`;
   render();
 
-  const shouldPickDirectory = input.isDir || converter === "cherry";
+  const t = getT();
+  const isDirOutput = input.isDir || converter === "cherry";
 
-  if (shouldPickDirectory) {
-    const pickedDirectory = await openDialog({
+  if (isDirOutput) {
+    const picked = await openDialog({
       directory: true,
-      multiple: false,
       defaultPath: input.path,
-      title: "请选择保存位置",
+      title: t.selecting,
     });
-
-    return normalizeDialogResult(pickedDirectory);
+    return Array.isArray(picked) ? picked[0] : (picked || null);
   }
 
-  const pickedFile = await save({
+  const picked = await save({
     defaultPath: buildSuggestedPath(input),
-    title: "请选择保存位置",
-    filters: [
-      {
-        name: "Markdown",
-        extensions: ["md"],
-      },
-    ],
+    title: t.selecting,
+    filters: [{ name: "Markdown", extensions: ["md"] }],
   });
-
-  return normalizeDialogResult(pickedFile);
-}
-
-function selectConverter(input) {
-  if (!input.isDir) {
-    const normalizedName = input.name.toLowerCase();
-    if (normalizedName.includes("cherry")) {
-      return "cherry";
-    }
-    if (normalizedName.includes("qwen")) {
-      return "qwen";
-    }
-  }
-
-  return "ai-studio";
+  return picked || null;
 }
 
 function buildSuggestedPath(input) {
-  const trimmed = input.name.trim();
-  if (!trimmed) {
-    return "output.md";
-  }
-
-  const suffixIndex = trimmed.lastIndexOf(".");
-  if (suffixIndex <= 0) {
-    return `${trimmed}.md`;
-  }
-
-  return `${trimmed.slice(0, suffixIndex)}.md`;
+  const name = input.name;
+  const dotIndex = name.lastIndexOf(".");
+  return dotIndex > 0 ? `${name.slice(0, dotIndex)}.md` : `${name}.md`;
 }
 
-function normalizeDialogResult(value) {
-  if (!value) {
-    return null;
-  }
-
-  if (Array.isArray(value)) {
-    return value[0] ?? null;
-  }
-
-  return value;
+function selectConverter(input) {
+  const name = input.name.toLowerCase();
+  if (name.includes("cherry")) return "cherry";
+  if (name.includes("qwen")) return "qwen";
+  return "ai-studio";
 }
 
 function loadOutputMode() {
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved === null) {
-    return true;
-  }
-
-  return saved === "true";
+  return saved === null ? true : saved === "true";
 }
 
-function buildReadyStatusLine(outputBesideSource) {
-  return outputBesideSource
-    ? "拖入后会直接在原位置旁输出结果。"
-    : "拖入后会立即弹出原生保存对话框。";
-}
-
-function updateOutputModeCopy() {
-  elements.outputModeCopy.textContent = state.outputBesideSource
-    ? "在原位置旁创建转换后的文件"
-    : "每次都手动选择保存位置";
-}
-
-function resetToReady(message) {
+function resetToReady() {
   state.isBusy = false;
   state.phase = "ready";
-  state.detailText = "";
   state.revealPath = "";
-  state.currentItem = "";
-  state.currentConverter = "";
-  state.statusLine = message || buildReadyStatusLine(state.outputBesideSource);
   render();
 }
 
 function scheduleReset() {
   clearResetTimer();
-  state.resetTimer = window.setTimeout(() => {
-    resetToReady();
-  }, AUTO_RESET_MS);
+  state.resetTimer = setTimeout(resetToReady, 4000);
 }
 
 function clearResetTimer() {
-  if (state.resetTimer) {
-    window.clearTimeout(state.resetTimer);
-    state.resetTimer = null;
-  }
+  if (state.resetTimer) clearTimeout(state.resetTimer);
 }
 
 function render() {
-  const copy = PHASE_COPY[state.phase];
-
+  const t = getT();
   elements.card.dataset.phase = state.phase;
   elements.icon.innerHTML = ICONS[state.phase];
-  elements.eyebrow.textContent = state.currentConverter
-    ? `${copy.eyebrow} · ${state.currentConverter}`
-    : copy.eyebrow;
-  elements.title.textContent = copy.title;
-  elements.description.textContent = state.currentItem
-    ? `${copy.description} 当前项目：${state.currentItem}`
-    : copy.description;
-  elements.metaPrimary.textContent = state.currentConverter
-    ? `转换器 · ${state.currentConverter}`
-    : "自动识别转换器";
-  elements.metaSecondary.textContent = state.currentItem
-    ? `当前项目 · ${state.currentItem}`
-    : "支持文件与文件夹";
-  updateOutputModeCopy();
-  elements.statusLine.textContent = state.statusLine;
-  elements.detailsText.textContent = state.detailText;
-  elements.detailsPanel.classList.toggle("hidden", !state.detailText);
-  if (!state.detailText) {
-    elements.detailsPanel.open = false;
-  }
-  elements.revealButton.classList.toggle(
-    "hidden",
-    !(state.phase === "success" && state.revealPath),
-  );
+  
+  // 更新状态文字
+  if (state.phase === "ready") elements.hintLabel.textContent = t.hint;
+  else if (state.phase === "selecting") elements.hintLabel.textContent = t.selecting;
+  else if (state.phase === "processing") elements.hintLabel.textContent = t.processing;
+  else if (state.phase === "success") elements.hintLabel.textContent = t.success;
+  else if (state.phase === "error") elements.hintLabel.textContent = t.error;
+
+  elements.detailsPanel.classList.toggle("hidden", state.phase !== "error");
+  elements.revealButton.classList.toggle("hidden", state.phase !== "success" || !state.revealPath);
 }
 
-function extractErrorMessage(error, fallback) {
-  if (!error) {
-    return fallback;
-  }
-
-  if (typeof error === "string") {
-    return error;
-  }
-
-  if (typeof error === "object" && "message" in error && error.message) {
-    return String(error.message);
-  }
-
-  return fallback;
-}
+updateI18nUI();
+render();
