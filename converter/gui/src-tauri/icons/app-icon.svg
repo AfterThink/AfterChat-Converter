@@ -1,0 +1,83 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="160" y1="120" x2="864" y2="904" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0E84FF"/>
+      <stop offset="0.55" stop-color="#406DFF"/>
+      <stop offset="1" stop-color="#6958FF"/>
+    </linearGradient>
+    <radialGradient id="bgGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(314 236) rotate(41.2) scale(618 624)">
+      <stop stop-color="white" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="white" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="leftCard" x1="255" y1="341" x2="523" y2="705" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#52E6C2"/>
+      <stop offset="1" stop-color="#29C97C"/>
+    </linearGradient>
+    <linearGradient id="rightCard" x1="542" y1="258" x2="814" y2="622" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8AB8FF"/>
+      <stop offset="1" stop-color="#5F78FF"/>
+    </linearGradient>
+    <linearGradient id="docFold" x1="629" y1="240" x2="720" y2="334" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EAF4FF"/>
+      <stop offset="1" stop-color="#CFE2FF"/>
+    </linearGradient>
+    <linearGradient id="docLines" x1="382" y1="390" x2="650" y2="562" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#117DFF"/>
+      <stop offset="1" stop-color="#5A67FF"/>
+    </linearGradient>
+    <filter id="softShadow" x="112" y="112" width="800" height="800" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="28"/>
+      <feGaussianBlur stdDeviation="30"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.102 0 0 0 0 0.149 0 0 0 0 0.37 0 0 0 0.22 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1_1" result="shape"/>
+    </filter>
+    <filter id="docShadow" x="214" y="150" width="596" height="720" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="24"/>
+      <feGaussianBlur stdDeviation="24"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.1 0 0 0 0 0.16 0 0 0 0 0.42 0 0 0 0.18 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1_1" result="shape"/>
+    </filter>
+  </defs>
+
+  <rect x="72" y="72" width="880" height="880" rx="224" fill="url(#bgGradient)"/>
+  <rect x="72" y="72" width="880" height="880" rx="224" fill="url(#bgGlow)"/>
+  <rect x="100" y="100" width="824" height="824" rx="196" stroke="white" stroke-opacity="0.14" stroke-width="2"/>
+
+  <g filter="url(#softShadow)">
+    <g transform="rotate(-10 385 528)">
+      <rect x="236" y="332" width="298" height="372" rx="86" fill="url(#leftCard)"/>
+      <rect x="296" y="422" width="122" height="22" rx="11" fill="white" fill-opacity="0.86"/>
+      <rect x="296" y="464" width="168" height="22" rx="11" fill="white" fill-opacity="0.72"/>
+      <circle cx="320" cy="390" r="18" fill="white" fill-opacity="0.92"/>
+      <circle cx="370" cy="390" r="18" fill="white" fill-opacity="0.65"/>
+    </g>
+    <g transform="rotate(10 668 428)">
+      <rect x="520" y="248" width="296" height="360" rx="86" fill="url(#rightCard)"/>
+      <rect x="582" y="330" width="154" height="22" rx="11" fill="white" fill-opacity="0.82"/>
+      <rect x="582" y="372" width="112" height="22" rx="11" fill="white" fill-opacity="0.64"/>
+      <rect x="582" y="414" width="176" height="22" rx="11" fill="white" fill-opacity="0.64"/>
+    </g>
+  </g>
+
+  <g filter="url(#docShadow)">
+    <rect x="296" y="224" width="432" height="576" rx="112" fill="white"/>
+    <path d="M617 224H728V338C728 353.464 715.464 366 700 366H617V224Z" fill="url(#docFold)"/>
+    <path d="M617 224C678.304 224 728 273.696 728 335V338H700C654.16 338 617 300.84 617 255V224Z" fill="#DDEBFF"/>
+    <rect x="382" y="390" width="190" height="34" rx="17" fill="url(#docLines)"/>
+    <rect x="382" y="454" width="244" height="28" rx="14" fill="url(#docLines)" fill-opacity="0.9"/>
+    <rect x="382" y="506" width="212" height="28" rx="14" fill="url(#docLines)" fill-opacity="0.72"/>
+    <rect x="382" y="558" width="232" height="28" rx="14" fill="url(#docLines)" fill-opacity="0.58"/>
+    <path d="M638 620L668 650L724 588" stroke="#29C97C" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g opacity="0.92">
+    <path d="M796 246L810 282L846 296L810 310L796 346L782 310L746 296L782 282L796 246Z" fill="white"/>
+    <path d="M236 762L246 786L270 796L246 806L236 830L226 806L202 796L226 786L236 762Z" fill="white" fill-opacity="0.76"/>
+  </g>
+</svg>
