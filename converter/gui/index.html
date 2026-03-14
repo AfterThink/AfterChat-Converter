@@ -8,10 +8,10 @@
     <script type="module" src="src/main.js" defer></script>
   </head>
   <body>
-    <main class="app-container" data-tauri-drag-region>
+    <div class="app-container">
       <div class="card" id="drop-card" data-phase="ready">
         <!-- Header Actions -->
-        <header class="card-header" data-tauri-drag-region>
+        <header class="card-header" data-window-drag>
           <div class="header-group">
             <button class="icon-btn" id="btn-help" title="Help">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
@@ -28,19 +28,23 @@
               <input type="checkbox" id="output-toggle" />
               <div class="slider"></div>
             </label>
+            <div class="divider"></div>
+            <button class="icon-btn btn-close" id="btn-close" title="Close">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
           </div>
         </header>
 
         <!-- Main Content -->
-        <div class="card-content" data-tauri-drag-region>
-          <div class="state-icon-wrapper" id="state-icon" data-tauri-drag-region>
+        <div class="card-content" data-window-drag>
+          <div class="state-icon-wrapper" id="state-icon">
             <!-- Icon injected by JS -->
           </div>
-          <p class="status-text" id="i18n-hint" data-tauri-drag-region>Drop files here</p>
+          <p class="status-text" id="i18n-hint">Drop files here</p>
         </div>
 
         <!-- Footer / Actions -->
-        <div class="card-footer" data-tauri-drag-region>
+        <div class="card-footer" data-window-drag>
           <button class="action-btn hidden" id="reveal-button">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             <span id="i18n-reveal">Reveal</span>
@@ -52,7 +56,7 @@
           </details>
         </div>
       </div>
-    </main>
+    </div>
 
     <!-- Help Modal -->
     <div id="help-modal" class="modal-overlay hidden">

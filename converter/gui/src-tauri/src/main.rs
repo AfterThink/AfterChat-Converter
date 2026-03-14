@@ -6,6 +6,7 @@ use std::process::Command as ProcessCommand;
 
 use serde::{Deserialize, Serialize};
 use tauri::api::process::{Command, CommandEvent};
+use tauri::Manager;
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -245,6 +246,13 @@ fn reveal_path(target: &Path) -> std::io::Result<()> {
 
 fn main() {
     tauri::Builder::default()
+        .setup(|app| {
+            if let Some(window) = app.get_window("main") {
+                let _ = window.center();
+            }
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             inspect_input,
             run_conversion,

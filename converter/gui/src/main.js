@@ -5,6 +5,18 @@ const { appWindow } = window.__TAURI__.window;
 const { getVersion } = window.__TAURI__.app;
 
 const STORAGE_KEY = "converters.output-mode";
+const NON_DRAGGABLE_SELECTOR = [
+  "button",
+  "input",
+  "label",
+  "a",
+  "summary",
+  "details",
+  "pre",
+  "textarea",
+  "select",
+  "[data-no-window-drag]",
+].join(", ");
 
 // i18n 配置
 const i18n = {
@@ -86,7 +98,9 @@ const elements = {
   modalClose: document.querySelector("#modal-close"),
   appVersion: document.querySelector("#app-version"),
   aboutDesc: document.querySelector("#i18n-about-desc"),
-  supportedFormats: document.querySelector("#i18n-supported-formats")
+  supportedFormats: document.querySelector("#i18n-supported-formats"),
+  btnClose: document.querySelector("#btn-close"),
+  dragRegions: document.querySelectorAll("[data-window-drag]"),
 };
 
 // 获取翻译
@@ -114,6 +128,15 @@ elements.btnLang.addEventListener("click", () => {
   render();
 });
 
+// 关闭逻辑
+elements.btnClose.addEventListener("click", async () => {
+  try {
+    await appWindow.close();
+  } catch (error) {
+    console.error("Failed to close window", error);
+  }
+});
+
 // 帮助逻辑
 elements.btnHelp.addEventListener("click", () => {
   elements.helpModal.classList.remove("hidden");
@@ -135,6 +158,23 @@ getVersion().then(version => {
     elements.appVersion.textContent = version;
   }
 });
+
+function bindWindowDragging() {
+  for (const dragRegion of elements.dragRegions) {
+    dragRegion.addEventListener("mousedown", async (event) => {
+      if (event.button !== 0) return;
+      const target = event.target instanceof Element ? event.target : dragRegion;
+      if (target.closest(NON_DRAGGABLE_SELECTOR)) return;
+
+      event.preventDefault();
+      try {
+        await appWindow.startDragging();
+      } catch (error) {
+        console.error("Failed to start window drag", error);
+      }
+    });
+  }
+}
 
 function loadLang() {
   const saved = localStorage.getItem("converters.lang");
@@ -309,4 +349,5 @@ function render() {
 }
 
 updateI18nUI();
+bindWindowDragging();
 render();

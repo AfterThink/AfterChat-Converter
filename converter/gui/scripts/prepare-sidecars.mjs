@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -31,8 +31,23 @@ for (const name of binaries) {
     throw new Error(`未找到 sidecar 二进制：${source}`);
   }
 
-  copyFileSync(source, target);
-  console.log(`copied ${name} -> ${target}`);
+  // Check if target needs update (if source is newer or target missing)
+  let needsCopy = true;
+  if (existsSync(target)) {
+    const srcStat = statSync(source);
+    const tgtStat = statSync(target);
+    // If source mtime is older or equal to target mtime, we assume it's up to date
+    if (srcStat.mtimeMs <= tgtStat.mtimeMs) {
+      needsCopy = false;
+    }
+  }
+
+  if (needsCopy) {
+    copyFileSync(source, target);
+    console.log(`copied ${name} -> ${target}`);
+  } else {
+    console.log(`skipped ${name} (up to date)`);
+  }
 }
 
 function buildWorkspaceBinaries() {

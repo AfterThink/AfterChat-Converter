@@ -76,6 +76,24 @@ body {
   overflow: hidden;
 }
 
+.card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at center, rgba(0, 113, 227, 0.03) 0%, transparent 70%);
+  z-index: 0;
+  pointer-events: none;
+  animation: bg-drift 10s ease-in-out infinite alternate;
+}
+
+@keyframes bg-drift {
+  0% { transform: translate(-5%, -5%); }
+  100% { transform: translate(5%, 5%); }
+}
+
 /* Drag & Drop States */
 .card[data-phase="ready"]:hover {
   background-color: #fafaff;
@@ -108,14 +126,14 @@ body {
   justify-content: space-between;
   align-items: center;
   z-index: 10;
-  /* Allow dragging from header */
-  -webkit-app-region: drag;
 }
 
-/* Interactive elements in header should not drag */
-.header-group button,
-.header-group label {
-  -webkit-app-region: no-drag;
+[data-window-drag] {
+  cursor: grab;
+}
+
+[data-window-drag]:active {
+  cursor: grabbing;
 }
 
 .header-group {
@@ -136,11 +154,29 @@ body {
   align-items: center;
   gap: 6px;
   transition: all var(--transition-fast);
+  z-index: 10;
 }
 
 .icon-btn:hover {
   background-color: rgba(0,0,0,0.05);
   color: var(--text-primary);
+  transform: scale(1.05);
+}
+
+.btn-close {
+  color: #999;
+}
+
+.btn-close:hover {
+  background-color: #ff3b3020;
+  color: var(--error-color);
+}
+
+.divider {
+  width: 1px;
+  height: 20px;
+  background-color: var(--border-color);
+  margin: 0 4px;
 }
 
 .lang-text {

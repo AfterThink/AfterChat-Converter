@@ -19,6 +19,11 @@
       },
       "path": {
         "all": true
+      },
+      "window": {
+        "all": false,
+        "close": true,
+        "startDragging": true
       }
     },
     "bundle": {
@@ -43,6 +48,7 @@
         "title": "Converters",
         "width": 360,
         "height": 400,
+        "center": true,
         "resizable": false,
         "fullscreen": false,
         "decorations": false,
