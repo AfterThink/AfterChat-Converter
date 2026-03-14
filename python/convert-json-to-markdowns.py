@@ -200,7 +200,21 @@ def convert_json_to_markdown(json_file_path, output_dir="conversations"):
         assistant_output_dir = os.path.join(output_dir, safe_assistant_name)
         os.makedirs(assistant_output_dir, exist_ok=True)
 
-        file_path = os.path.join(assistant_output_dir, f"{safe_name}.md")
+        # 处理同名文件：添加时间戳后缀
+        base_name = safe_name
+        file_path = os.path.join(assistant_output_dir, f"{base_name}.md")
+        counter = 1
+        while os.path.exists(file_path):
+            if created_at and created_at != 'Unknown':
+                timestamp_suffix = created_at[:19].replace('T', '-').replace(':', '-')
+            else:
+                timestamp_suffix = f"copy{counter}"
+            file_path = os.path.join(assistant_output_dir, f"{base_name}_{timestamp_suffix}.md")
+            if os.path.exists(file_path):
+                file_path = os.path.join(assistant_output_dir, f"{base_name}_{timestamp_suffix}-{counter}.md")
+                counter += 1
+            else:
+                break
             
         try:
             with open(file_path, 'w', encoding='utf-8') as f:

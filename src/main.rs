@@ -374,7 +374,27 @@ fn main() -> Result<()> {
             return;
         }
 
-        let file_path = assistant_dir.join(format!("{}.md", safe_name));
+        // 处理同名文件：添加时间戳后缀
+        let mut file_path = assistant_dir.join(format!("{}.md", safe_name));
+        let mut counter = 1;
+        while file_path.exists() {
+            let timestamp_suffix = if created_at_str != "Unknown" {
+                created_at_str.chars().take(19).collect::<String>().replace(['T', ':'], "-")
+            } else {
+                format!("copy{}", counter)
+            };
+            let new_filename = format!("{}_{}.md", safe_name, timestamp_suffix);
+            file_path = assistant_dir.join(&new_filename);
+            
+            // 如果加了时间戳还是同名，继续添加序号
+            if file_path.exists() {
+                let numbered_filename = format!("{}_{}-{}.md", safe_name, timestamp_suffix, counter);
+                file_path = assistant_dir.join(&numbered_filename);
+                counter += 1;
+            } else {
+                break;
+            }
+        }
         
         if let Ok(mut f) = File::create(&file_path) {
             if let Err(e) = f.write_all(md_content.as_bytes()) {
