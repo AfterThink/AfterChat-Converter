@@ -8,30 +8,77 @@
     <script type="module" src="/src/main.js" defer></script>
   </head>
   <body>
-    <main class="app-shell">
-      <section class="drop-card" id="drop-card" data-phase="ready">
-        <div class="drop-card__icon" id="state-icon" aria-hidden="true">⇪</div>
-        <div class="drop-card__body">
-          <p class="drop-card__eyebrow" id="eyebrow">等待文件</p>
-          <h1 class="drop-card__title" id="title">将文件或文件夹拖拽至此</h1>
-          <p class="drop-card__description" id="description">松手后立即开始转换，不需要额外按钮。</p>
-        </div>
-        <button class="ghost-button hidden" id="reveal-button" type="button">在资源管理器中显示</button>
+    <main class="window-shell">
+      <section class="window">
+        <header class="titlebar">
+          <div class="traffic-lights" aria-hidden="true">
+            <span class="traffic-lights__dot traffic-lights__dot--red"></span>
+            <span class="traffic-lights__dot traffic-lights__dot--yellow"></span>
+            <span class="traffic-lights__dot traffic-lights__dot--green"></span>
+          </div>
+
+          <div class="titlebar__center">
+            <p class="titlebar__eyebrow">Converters</p>
+            <h2 class="titlebar__title">Local Conversation Converter</h2>
+          </div>
+
+          <p class="titlebar__hint">拖拽后立即处理</p>
+        </header>
+
+        <section class="window__content">
+          <section class="drop-card" id="drop-card" data-phase="ready">
+            <div class="drop-card__frame" aria-hidden="true"></div>
+
+            <div class="drop-card__content">
+              <div class="state-orb" aria-hidden="true">
+                <div class="state-orb__halo"></div>
+                <div class="state-orb__icon" id="state-icon"></div>
+              </div>
+
+              <div class="drop-card__copy">
+                <p class="drop-card__eyebrow" id="eyebrow">等待文件</p>
+                <h1 class="drop-card__title" id="title">将文件或文件夹拖拽至此</h1>
+                <p class="drop-card__description" id="description">松手后立即开始转换，不需要额外按钮。</p>
+              </div>
+
+              <div class="meta-row">
+                <span class="meta-pill" id="meta-primary">自动识别转换器</span>
+                <span class="meta-pill" id="meta-secondary">支持文件与文件夹</span>
+              </div>
+
+              <button class="action-button hidden" id="reveal-button" type="button">在访达 / 资源管理器中显示</button>
+            </div>
+          </section>
+
+          <section class="bottom-row">
+            <label class="setting-card" for="output-toggle">
+              <div class="setting-card__copy">
+                <p class="setting-card__label">输出位置</p>
+                <p class="setting-card__value" id="output-mode-copy">在原位置旁创建转换后的文件</p>
+              </div>
+
+              <span class="toggle">
+                <input id="output-toggle" type="checkbox" />
+                <span class="toggle__track">
+                  <span class="toggle__thumb"></span>
+                </span>
+              </span>
+            </label>
+
+            <section class="status-card" aria-live="polite">
+              <p class="status-card__label">状态反馈</p>
+              <p class="status-card__text" id="status-line">
+                拖入包含 <code>cherry</code> / <code>qwen</code> 的文件会自动路由。
+              </p>
+            </section>
+          </section>
+
+          <details class="details-panel hidden" id="details-panel">
+            <summary>查看详情</summary>
+            <pre id="details-text"></pre>
+          </details>
+        </section>
       </section>
-
-      <label class="option-row" for="output-toggle">
-        <input class="option-row__checkbox" id="output-toggle" type="checkbox" />
-        <span class="option-row__label">在原位置旁创建转换后的文件</span>
-      </label>
-
-      <p class="status-line" id="status-line">
-        拖入包含 <code>cherry</code> / <code>qwen</code> 的文件会自动路由到对应转换器。
-      </p>
-
-      <details class="details-panel hidden" id="details-panel">
-        <summary>查看详情</summary>
-        <pre id="details-text"></pre>
-      </details>
     </main>
   </body>
 </html>

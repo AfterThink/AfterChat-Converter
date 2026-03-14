@@ -5,39 +5,75 @@ import { appWindow } from "@tauri-apps/api/window";
 const STORAGE_KEY = "converters.inline-output";
 const AUTO_RESET_MS = 4200;
 
+const ICONS = {
+  ready: `
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M24 8v18"></path>
+      <path d="M16 20l8 8 8-8"></path>
+      <path d="M11 34h26"></path>
+    </svg>
+  `,
+  hovering: `
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M24 9v20"></path>
+      <path d="M14 21l10 10 10-10"></path>
+      <path d="M12 37h24"></path>
+    </svg>
+  `,
+  selecting: `
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M8 16h12l4 4h16v14a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4z"></path>
+      <path d="M8 16a4 4 0 0 1 4-4h8l4 4"></path>
+    </svg>
+  `,
+  processing: `
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M24 9a15 15 0 1 1-10.6 4.4"></path>
+      <path d="M24 9v7"></path>
+    </svg>
+  `,
+  success: `
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M14 25l7 7 13-15"></path>
+      <circle cx="24" cy="24" r="15"></circle>
+    </svg>
+  `,
+  error: `
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <circle cx="24" cy="24" r="15"></circle>
+      <path d="M19 19l10 10"></path>
+      <path d="M29 19L19 29"></path>
+    </svg>
+  `,
+};
+
 const PHASE_COPY = {
   ready: {
-    icon: "⇪",
     eyebrow: "等待文件",
     title: "将文件或文件夹拖拽至此",
     description: "松手后立即开始转换，不需要额外按钮。",
   },
   hovering: {
-    icon: "↓",
     eyebrow: "准备接收",
     title: "松手即可开始",
     description: "我会根据名称自动选择合适的转换器。",
   },
   selecting: {
-    icon: "⋯",
     eyebrow: "等待路径",
     title: "请选择保存位置",
     description: "一旦确认路径，就会立刻开始处理。",
   },
   processing: {
-    icon: "○",
     eyebrow: "处理中",
     title: "正在转换…",
     description: "请稍等，我正在调用对应的后端转换器。",
   },
   success: {
-    icon: "✓",
     eyebrow: "转换完成",
     title: "已成功生成输出",
     description: "你可以直接打开输出位置继续查看结果。",
   },
   error: {
-    icon: "✕",
     eyebrow: "转换失败",
     title: "这次没有完成",
     description: "可展开查看错误详情，然后重试。",
@@ -53,8 +89,7 @@ const converterLabels = {
 const state = {
   phase: "ready",
   outputBesideSource: loadOutputMode(),
-  statusLine:
-    "拖入包含 cherry / qwen 的文件会自动路由到对应转换器。",
+  statusLine: buildReadyStatusLine(loadOutputMode()),
   detailText: "",
   revealPath: "",
   currentItem: "",
@@ -69,7 +104,10 @@ const elements = {
   eyebrow: document.querySelector("#eyebrow"),
   title: document.querySelector("#title"),
   description: document.querySelector("#description"),
+  metaPrimary: document.querySelector("#meta-primary"),
+  metaSecondary: document.querySelector("#meta-secondary"),
   outputToggle: document.querySelector("#output-toggle"),
+  outputModeCopy: document.querySelector("#output-mode-copy"),
   statusLine: document.querySelector("#status-line"),
   detailsPanel: document.querySelector("#details-panel"),
   detailsText: document.querySelector("#details-text"),
@@ -82,10 +120,10 @@ elements.outputToggle.addEventListener("change", (event) => {
   localStorage.setItem(STORAGE_KEY, String(state.outputBesideSource));
 
   if (!state.isBusy && state.phase === "ready") {
-    state.statusLine = state.outputBesideSource
-      ? "将直接在原位置旁输出结果。"
-      : "拖入后会立即弹出原生保存对话框。";
+    state.statusLine = buildReadyStatusLine(state.outputBesideSource);
     render();
+  } else {
+    updateOutputModeCopy();
   }
 });
 
@@ -106,7 +144,7 @@ appWindow.onFileDropEvent(async (event) => {
   const payload = event.payload;
 
   if (state.isBusy && payload.type === "drop") {
-    state.statusLine = "当前仍在处理中，请稍等这一轮结束。";
+    state.statusLine = "当前仍在处理中，请等这一轮结束。";
     render();
     return;
   }
@@ -233,9 +271,8 @@ async function resolveOutputPath(input, converter) {
     return normalizeDialogResult(pickedDirectory);
   }
 
-  const suggestedName = buildSuggestedFileName(input.name);
   const pickedFile = await save({
-    defaultPath: suggestedName,
+    defaultPath: buildSuggestedPath(input),
     title: "请选择保存位置",
     filters: [
       {
@@ -262,8 +299,8 @@ function selectConverter(input) {
   return "ai-studio";
 }
 
-function buildSuggestedFileName(name) {
-  const trimmed = name.trim();
+function buildSuggestedPath(input) {
+  const trimmed = input.name.trim();
   if (!trimmed) {
     return "output.md";
   }
@@ -297,6 +334,18 @@ function loadOutputMode() {
   return saved === "true";
 }
 
+function buildReadyStatusLine(outputBesideSource) {
+  return outputBesideSource
+    ? "拖入后会直接在原位置旁输出结果。"
+    : "拖入后会立即弹出原生保存对话框。";
+}
+
+function updateOutputModeCopy() {
+  elements.outputModeCopy.textContent = state.outputBesideSource
+    ? "在原位置旁创建转换后的文件"
+    : "每次都手动选择保存位置";
+}
+
 function resetToReady(message) {
   state.isBusy = false;
   state.phase = "ready";
@@ -304,8 +353,7 @@ function resetToReady(message) {
   state.revealPath = "";
   state.currentItem = "";
   state.currentConverter = "";
-  state.statusLine =
-    message || "拖入包含 cherry / qwen 的文件会自动路由到对应转换器。";
+  state.statusLine = message || buildReadyStatusLine(state.outputBesideSource);
   render();
 }
 
@@ -327,8 +375,7 @@ function render() {
   const copy = PHASE_COPY[state.phase];
 
   elements.card.dataset.phase = state.phase;
-  elements.icon.textContent = copy.icon;
-  elements.icon.classList.toggle("is-spinning", state.phase === "processing");
+  elements.icon.innerHTML = ICONS[state.phase];
   elements.eyebrow.textContent = state.currentConverter
     ? `${copy.eyebrow} · ${state.currentConverter}`
     : copy.eyebrow;
@@ -336,9 +383,19 @@ function render() {
   elements.description.textContent = state.currentItem
     ? `${copy.description} 当前项目：${state.currentItem}`
     : copy.description;
+  elements.metaPrimary.textContent = state.currentConverter
+    ? `转换器 · ${state.currentConverter}`
+    : "自动识别转换器";
+  elements.metaSecondary.textContent = state.currentItem
+    ? `当前项目 · ${state.currentItem}`
+    : "支持文件与文件夹";
+  updateOutputModeCopy();
   elements.statusLine.textContent = state.statusLine;
   elements.detailsText.textContent = state.detailText;
   elements.detailsPanel.classList.toggle("hidden", !state.detailText);
+  if (!state.detailText) {
+    elements.detailsPanel.open = false;
+  }
   elements.revealButton.classList.toggle(
     "hidden",
     !(state.phase === "success" && state.revealPath),
