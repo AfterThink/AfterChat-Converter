@@ -41,10 +41,12 @@
     "windows": [
       {
         "title": "Converters",
-        "width": 880,
-        "height": 640,
-        "resizable": true,
+        "width": 360,
+        "height": 400,
+        "resizable": false,
         "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
         "fileDropEnabled": true
       }
     ]

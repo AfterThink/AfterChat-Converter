@@ -8,10 +8,10 @@
     <script type="module" src="src/main.js" defer></script>
   </head>
   <body>
-    <main class="app-container">
+    <main class="app-container" data-tauri-drag-region>
       <div class="card" id="drop-card" data-phase="ready">
         <!-- Header Actions -->
-        <header class="card-header">
+        <header class="card-header" data-tauri-drag-region>
           <div class="header-group">
             <button class="icon-btn" id="btn-help" title="Help">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
@@ -32,15 +32,15 @@
         </header>
 
         <!-- Main Content -->
-        <div class="card-content">
-          <div class="state-icon-wrapper" id="state-icon">
+        <div class="card-content" data-tauri-drag-region>
+          <div class="state-icon-wrapper" id="state-icon" data-tauri-drag-region>
             <!-- Icon injected by JS -->
           </div>
-          <p class="status-text" id="i18n-hint">Drop files here</p>
+          <p class="status-text" id="i18n-hint" data-tauri-drag-region>Drop files here</p>
         </div>
 
         <!-- Footer / Actions -->
-        <div class="card-footer">
+        <div class="card-footer" data-tauri-drag-region>
           <button class="action-btn hidden" id="reveal-button">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             <span id="i18n-reveal">Reveal</span>
@@ -53,5 +53,31 @@
         </div>
       </div>
     </main>
+
+    <!-- Help Modal -->
+    <div id="help-modal" class="modal-overlay hidden">
+      <div class="modal-content">
+        <button class="modal-close" id="modal-close">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <h2 class="modal-title">Converters</h2>
+        <div class="modal-body">
+          <p id="i18n-about-desc">A simple tool to convert conversation history JSON files to Markdown.</p>
+          
+          <div class="feature-list">
+            <h3 id="i18n-supported-formats">Supported Formats:</h3>
+            <ul>
+              <li>Google AI Studio Exports</li>
+              <li>Cherry Studio Backups</li>
+              <li>Qwen Chat Exports</li>
+            </ul>
+          </div>
+
+          <div class="version-info">
+            <span>Version <span id="app-version">0.1.0</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

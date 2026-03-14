@@ -2,6 +2,7 @@
 const { open: openDialog, save } = window.__TAURI__.dialog;
 const { invoke } = window.__TAURI__.tauri;
 const { appWindow } = window.__TAURI__.window;
+const { getVersion } = window.__TAURI__.app;
 
 const STORAGE_KEY = "converters.output-mode";
 
@@ -14,7 +15,9 @@ const i18n = {
     selecting: "Select destination...",
     processing: "Processing...",
     success: "Done",
-    error: "Failed"
+    error: "Failed",
+    aboutDesc: "A simple tool to convert conversation history JSON files to Markdown.",
+    supportedFormats: "Supported Formats:"
   },
   zh: {
     inplace: "原位生成",
@@ -23,7 +26,9 @@ const i18n = {
     selecting: "选择保存位置...",
     processing: "处理中...",
     success: "完成",
-    error: "失败"
+    error: "失败",
+    aboutDesc: "一个简单的工具，用于将对话历史 JSON 文件转换为 Markdown。",
+    supportedFormats: "支持的格式："
   }
 };
 
@@ -75,7 +80,13 @@ const elements = {
   // 新按钮
   btnHelp: document.querySelector("#btn-help"),
   btnLang: document.querySelector("#btn-lang"),
-  currentLangText: document.querySelector("#current-lang")
+  currentLangText: document.querySelector("#current-lang"),
+  // Modal elements
+  helpModal: document.querySelector("#help-modal"),
+  modalClose: document.querySelector("#modal-close"),
+  appVersion: document.querySelector("#app-version"),
+  aboutDesc: document.querySelector("#i18n-about-desc"),
+  supportedFormats: document.querySelector("#i18n-supported-formats")
 };
 
 // 获取翻译
@@ -90,6 +101,9 @@ function updateI18nUI() {
   elements.hintLabel.textContent = t.hint;
   elements.revealLabel.textContent = t.reveal;
   elements.currentLangText.textContent = state.lang.toUpperCase();
+  // Update modal texts
+  if (elements.aboutDesc) elements.aboutDesc.textContent = t.aboutDesc;
+  if (elements.supportedFormats) elements.supportedFormats.textContent = t.supportedFormats;
 }
 
 // 语言切换逻辑
@@ -102,10 +116,24 @@ elements.btnLang.addEventListener("click", () => {
 
 // 帮助逻辑
 elements.btnHelp.addEventListener("click", () => {
-  const msg = state.lang === "zh" 
-    ? "拖拽 JSON 文件到中心区域即可开始转换。\n\n支持的文件：\n- Google AI Studio 导出\n- Cherry Studio 备份\n- Qwen 格式" 
-    : "Drag JSON files to the center area to start.\n\nSupported files:\n- Google AI Studio exports\n- Cherry Studio backups\n- Qwen formats";
-  alert(msg);
+  elements.helpModal.classList.remove("hidden");
+});
+
+elements.modalClose.addEventListener("click", () => {
+  elements.helpModal.classList.add("hidden");
+});
+
+elements.helpModal.addEventListener("click", (e) => {
+  if (e.target === elements.helpModal) {
+    elements.helpModal.classList.add("hidden");
+  }
+});
+
+// 获取版本号
+getVersion().then(version => {
+  if (elements.appVersion) {
+    elements.appVersion.textContent = version;
+  }
 });
 
 function loadLang() {
