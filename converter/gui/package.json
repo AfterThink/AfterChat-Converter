@@ -1,0 +1,22 @@
+{
+  "name": "converters-gui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 1420",
+    "build": "vite build",
+    "prepare:sidecars": "bun run scripts/prepare-sidecars.mjs",
+    "prepare:sidecars:release": "bun run scripts/prepare-sidecars.mjs --release",
+    "dev:tauri": "bun run prepare:sidecars && bun run dev",
+    "build:tauri": "bun run prepare:sidecars:release && bun run build",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^1.6.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^1.6.0",
+    "vite": "^5.4.14"
+  }
+}

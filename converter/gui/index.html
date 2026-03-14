@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Converters</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <script type="module" src="/src/main.js" defer></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="drop-card" id="drop-card" data-phase="ready">
+        <div class="drop-card__icon" id="state-icon" aria-hidden="true">⇪</div>
+        <div class="drop-card__body">
+          <p class="drop-card__eyebrow" id="eyebrow">等待文件</p>
+          <h1 class="drop-card__title" id="title">将文件或文件夹拖拽至此</h1>
+          <p class="drop-card__description" id="description">松手后立即开始转换，不需要额外按钮。</p>
+        </div>
+        <button class="ghost-button hidden" id="reveal-button" type="button">在资源管理器中显示</button>
+      </section>
+
+      <label class="option-row" for="output-toggle">
+        <input class="option-row__checkbox" id="output-toggle" type="checkbox" />
+        <span class="option-row__label">在原位置旁创建转换后的文件</span>
+      </label>
+
+      <p class="status-line" id="status-line">
+        拖入包含 <code>cherry</code> / <code>qwen</code> 的文件会自动路由到对应转换器。
+      </p>
+
+      <details class="details-panel hidden" id="details-panel">
+        <summary>查看详情</summary>
+        <pre id="details-text"></pre>
+      </details>
+    </main>
+  </body>
+</html>

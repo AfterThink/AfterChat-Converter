@@ -4,4 +4,5 @@ members = [
     "converter/cherry",
     "converter/ai-studio",
     "converter/qwen",
+    "converter/gui/src-tauri",
 ]
