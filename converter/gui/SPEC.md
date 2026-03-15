@@ -18,18 +18,25 @@
 2.  **前端**：捕获拖放事件并调用 `inspect_input` Tauri 命令。
 3.  **后端**：
     *   分析输入路径（文件或目录）。
-    *   读取文件头或目录内容以检测格式。
-    *   将 `InputInfo`（包括检测到的 `ConverterKind`）返回给前端。
-4.  **前端**：更新 UI 以显示“就绪”状态（或错误）。
-5.  **用户操作**：用户点击“转换”（由拖放操作隐含，或如果需要确认），或者如果设计为自动处理则直接开始（目前，如果有效，拖放/检测后立即处理）。
-6.  **后端**：调用 `run_conversion`。它构建参数并生成相应的侧车程序进程。
-7.  **侧车程序**：读取输入，进行转换，并写入输出。
-8.  **后端**：捕获 stdout/stderr/退出码并将结果返回给前端。
-9.  **前端**：显示成功或错误消息，并提供“显示文件位置 (Reveal)"选项。
+    *   如果是目录，递归检查是否包含 `.json` 文件。
+    *   将 `InputInfo` 返回给前端。
+4.  **前端**：更新 UI 以显示“就绪”状态。
+5.  **用户操作/自动触发**：前端调用 `run_conversion`。
+6.  **后端**：
+    *   如果请求中指定了 `converter`，则仅尝试该转换器。
+    *   如果未指定，则按顺序尝试所有转换器（AiStudio -> Cherry -> Qwen），第一个返回退出码 0 的视为成功。
+    *   构建参数并执行侧车程序。
+7.  **侧车程序**：执行实际转换。
+8.  **后端**：捕获输出并将结果返回。
+9.  **前端**：显示结果并提供“显示文件位置 (Reveal)"选项。
 
 ## 3. 功能
 
-### 3.1 拖放界面
+### 3.1 启动配置与参数
+*   **命令行参数**：支持 `-o`/`--output` 指定默认输出路径，`-l`/`--lang` 指定启动语言。
+*   **配置获取**：前端启动时通过 `get_launch_config` 获取这些初始配置。
+
+### 3.2 拖放界面
 *   **拖放区域 (Drop Zone)**：整个应用程序窗口作为拖放区域。
 *   **视觉反馈**：
     *   **就绪 (Ready)**：初始状态，等待输入。
@@ -38,32 +45,23 @@
     *   **成功 (Success)**：绿色对勾，带有“显示文件位置”选项。
     *   **错误 (Error)**：红色叉号，带有错误详情。
 
-### 3.2 格式检测 (`inspect_input`)
-后端根据文件内容（JSON 结构）或目录特征自动检测输入格式。
+### 3.3 格式检测 (`inspect_input`)
+后端现在更通用地检查输入是否为有效的 JSON 文件或包含 JSON 的目录，而不再在 `inspect_input` 阶段进行硬编码的键匹配检测。具体的格式识别由 `run_conversion` 阶段通过尝试不同的侧车程序来完成。
 
-*   **Google AI Studio**：如果 JSON 对象包含键：`runSettings`、`chunkedPrompt` 或 `systemInstruction`，则检测到。
-*   **Cherry Studio**：如果 JSON 对象包含键：`indexedDB` 或 `localStorage`，则检测到。
-*   **Qwen**：
-    *   **文件**：如果 JSON 对象包含键：`data`（数组）、`chat`、`messages`、`meta`、`chat_type` 或 `sub_chat_type`，则检测到。如果根节点是对象的 JSON 数组，也会被检测到。
-    *   **目录**：如果拖放的是目录，检查其是否包含 `.json` 文件。默认使用 `Qwen` 转换器进行批量处理。
+### 3.4 转换过程 (`run_conversion`)
+*   **自动尝试机制**：后端会自动轮询所有支持的侧车程序（AiStudio, Cherry, Qwen），直到找到能处理该输入的程序。
+*   **侧车程序执行**：通过 Tauri 的 `Command::new_sidecar` 异步调用。
 
-### 3.3 转换过程 (`run_conversion`)
-执行相应的侧车程序二进制文件：
-*   `google-ai-studio-json-converter`
-*   `cherry-studio-backup-json-converter`
-*   `qwen-json-converter`
+### 3.5 输出管理
+*   **预测输出路径**：后端根据输入是文件还是目录，以及是否指定了输出路径，来预测并返回最终的 `output_path`。
+*   **显示文件位置 (Reveal)**：支持在不同操作系统（Windows/macOS/Linux）下打开文件管理器并选中目标文件。
 
-### 3.4 输出管理
-*   **同目录保存 (In-Place)**：输出文件保存在与源文件相同的目录中。
-*   **自定义位置 (Custom Location)**：*在后端 `predict_output_path` 逻辑中实现，由前端切换/选择支持。*
-*   **显示文件位置 (Reveal)**：“显示”按钮打开文件资源管理器并定位到输出文件/文件夹位置。
-
-### 3.5 国际化 (i18n)
+### 3.6 国际化 (i18n)
 *   支持 **英文 (en)** 和 **中文 (zh)**。
 *   UI 中包含语言切换。
 *   持久化语言偏好设置。
 
-### 3.6 窗口配置
+### 3.7 窗口配置
 *   **尺寸**：固定大小 (360x400)。
 *   **样式**：无边框 (decorations: false)，背景透明。
 *   **行为**：不可调整大小，启动时居中。
@@ -74,6 +72,9 @@
 ```
 converter/gui/
 ├── src/                # 前端源码 (HTML/JS/CSS)
+│   ├── index.html
+│   ├── main.js
+│   └── styles.css
 ├── src-tauri/          # 后端源码 (Rust)
 │   ├── src/main.rs     # 主应用程序逻辑
 │   ├── tauri.conf.json # Tauri 配置
@@ -83,19 +84,29 @@ converter/gui/
 └── package.json        # Node 依赖和脚本
 ```
 
-### 4.2 构建系统
+### 4.2 构建与部署
 *   **侧车程序准备**：`prepare-sidecars.mjs` 脚本至关重要。它：
     1.  检测主机架构（Rust 目标三元组）。
     2.  使用 `cargo build` 从工作区 (`../ai-studio`, `../cherry`, `../qwen`) 构建转换器二进制文件。
     3.  将二进制文件复制并重命名到 `src-tauri/bin/`，遵循 Tauri 要求的 `<name>-<target-triple>` 命名约定。
-*   **Tauri 构建**：`tauri build` 将前端和准备好的侧车程序捆绑到单个安装程序/可执行文件中。
+*   **本地构建**：`tauri build` 将前端和准备好的侧车程序捆绑到单个安装程序/可执行文件中。
+*   **CI/CD (GitHub Actions)**：
+    *   配置文件位于 `.github/workflows/release.yml`。
+    *   当推送版本标签 (`v*`) 时自动触发。
+    *   在 Windows 环境下构建并发布 GitHub Release，包含 NSIS (.exe) 安装包。
 
 ### 4.3 侧车程序参数
-后端为侧车程序构建命令行参数：
-*   **通用**：输入路径作为位置参数或通过 `-i` 传递。输出路径通过 `-o` 传递。
-*   **Qwen 特定**：传递 `--progress false` 以在 GUI 执行期间禁用 CLI 进度条。
+后端为侧车程序构建命令行参数：输入路径作为位置参数。如果指定了输出路径，则通过 `-o` 传递。
 
 ### 4.4 数据结构 (IPC)
+
+**LaunchConfig (后端 -> 前端)**:
+```rust
+struct LaunchConfig {
+    output_path: Option<String>,
+    lang: Option<String>,
+}
+```
 
 **ConverterKind 枚举**:
 ```rust
@@ -109,7 +120,7 @@ enum ConverterKind {
 **ConvertRequest (前端 -> 后端)**:
 ```rust
 struct ConvertRequest {
-    converter: ConverterKind,
+    converter: Option<ConverterKind>, // 可选，不指定则自动尝试
     input_path: String,
     output_path: Option<String>,
 }
@@ -121,7 +132,6 @@ struct InputInfo {
     path: String,
     name: String,
     is_dir: bool,
-    converter_kind: Option<ConverterKind>,
 }
 ```
 
@@ -135,14 +145,12 @@ struct ConvertResponse {
 }
 ```
 
-## 5. 支持的格式
+## 5. 支持的格式与自动识别
 
-| 格式 | 检测键 (Detector Keys) | 侧车程序二进制文件 (Sidecar Binary) |
+应用程序不再依赖前端或后端的预先硬编码检测逻辑，而是通过**依次尝试执行侧车程序**并检查返回码来实现自动识别。
+
+| 格式 | 侧车程序标识 | 内部二进制名称 |
 | :--- | :--- | :--- |
-| **Google AI Studio** | `runSettings`, `chunkedPrompt`, `systemInstruction` | `google-ai-studio-json-converter` |
-| **Cherry Studio** | `indexedDB`, `localStorage` | `cherry-studio-backup-json-converter` |
-| **Qwen** | `data` (array), `chat`, `messages`, `meta`, `chat_type`, `sub_chat_type`, 或数组根节点 | `qwen-json-converter` |
-
-## 6. 未来考量
-*   **进度追踪**：目前，`Qwen` 进度已禁用。实现从 stdout 解析实时进度将改善大批量转换的用户体验 (UX)。
-*   **配置**：特定转换器选项（例如 Qwen 的特定标志）的 UI 目前较为精简。
+| **Google AI Studio** | `ai-studio` | `google-ai-studio-json-converter` |
+| **Cherry Studio** | `cherry` | `cherry-studio-backup-json-converter` |
+| **Qwen** | `qwen` | `qwen-json-converter` |
