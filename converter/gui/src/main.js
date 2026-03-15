@@ -314,7 +314,7 @@ async function handleDrop(paths) {
 
   try {
     const input = await invoke("inspect_input", { path: targetPath });
-    const converter = input.converterKind || selectConverter(input);
+    const converter = selectConverter(input);
     
     const outputPath = await resolveOutputPath(input, converter);
     if (outputPath === null) {
@@ -352,7 +352,7 @@ async function resolveOutputPath(input, converter) {
   render();
 
   const t = getT();
-  const isDirOutput = input.isDir || converter === "cherry";
+  const isDirOutput = input.isDir || converter === null;
 
   if (isDirOutput) {
     const picked = await openDialog({
@@ -381,7 +381,8 @@ function selectConverter(input) {
   const name = input.name.toLowerCase();
   if (name.includes("cherry")) return "cherry";
   if (name.includes("qwen")) return "qwen";
-  return "ai-studio";
+  if (name.includes("ai-studio") || name.includes("aistudio") || name.includes("gemini")) return "ai-studio";
+  return null;
 }
 
 function loadOutputMode() {

@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use tauri::api::process::{Command, CommandEvent};
 use tauri::Manager;
 
@@ -17,10 +16,16 @@ enum ConverterKind {
     Qwen,
 }
 
+const ALL_CONVERTERS: [ConverterKind; 3] = [
+    ConverterKind::AiStudio,
+    ConverterKind::Cherry,
+    ConverterKind::Qwen,
+];
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ConvertRequest {
-    converter: ConverterKind,
+    converter: Option<ConverterKind>,
     input_path: String,
     output_path: Option<String>,
 }
@@ -31,7 +36,6 @@ struct InputInfo {
     path: String,
     name: String,
     is_dir: bool,
-    converter_kind: Option<ConverterKind>,
 }
 
 #[derive(Debug, Serialize)]
@@ -56,7 +60,7 @@ fn inspect_input(path: String) -> Result<InputInfo, String> {
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| input_path.display().to_string());
 
-    let converter_kind = if metadata.is_dir() {
+    if metadata.is_dir() {
         if !directory_contains_json(&input_path)
             .map_err(|error| format!("无法读取目录 {}: {error}", input_path.display()))?
         {
@@ -65,17 +69,12 @@ fn inspect_input(path: String) -> Result<InputInfo, String> {
                 input_path.display()
             ));
         }
-
-        Some(ConverterKind::Qwen)
-    } else {
-        Some(detect_converter_kind_from_file(&input_path)?)
-    };
+    }
 
     Ok(InputInfo {
         path,
         name,
         is_dir: metadata.is_dir(),
-        converter_kind,
     })
 }
 
@@ -83,16 +82,76 @@ fn inspect_input(path: String) -> Result<InputInfo, String> {
 async fn run_conversion(request: ConvertRequest) -> Result<ConvertResponse, String> {
     let input_path = PathBuf::from(&request.input_path);
     let output_path = request.output_path.as_ref().map(PathBuf::from);
-    let predicted_output =
-        predict_output_path(request.converter, &input_path, output_path.as_ref())?;
+    let args = build_args(&input_path, output_path.as_ref());
 
-    let sidecar_name = match request.converter {
+    let predicted_output = match &output_path {
+        Some(path) => path.clone(),
+        None => {
+            if input_path.is_dir() {
+                input_path.clone()
+            } else {
+                input_path
+                    .parent()
+                    .map(Path::to_path_buf)
+                    .unwrap_or_else(|| PathBuf::from("."))
+            }
+        }
+    };
+
+    if let Some(converter) = request.converter {
+        let result = try_sidecar(converter, &args).await?;
+        return Ok(ConvertResponse {
+            exit_code: result.exit_code,
+            stdout: result.stdout,
+            stderr: result.stderr,
+            output_path: predicted_output.display().to_string(),
+        });
+    }
+
+    // Try all converters, first exit 0 wins
+    let mut last_error = String::new();
+    for kind in ALL_CONVERTERS {
+        let result = try_sidecar(kind, &args).await?;
+        if result.exit_code == 0 {
+            return Ok(ConvertResponse {
+                exit_code: result.exit_code,
+                stdout: result.stdout,
+                stderr: result.stderr,
+                output_path: predicted_output.display().to_string(),
+            });
+        }
+        last_error = [result.stderr, result.stdout]
+            .into_iter()
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
+
+    Ok(ConvertResponse {
+        exit_code: 1,
+        stdout: String::new(),
+        stderr: if last_error.is_empty() {
+            "所有转换器均无法处理此文件".to_string()
+        } else {
+            last_error
+        },
+        output_path: predicted_output.display().to_string(),
+    })
+}
+
+struct SidecarResult {
+    exit_code: i32,
+    stdout: String,
+    stderr: String,
+}
+
+async fn try_sidecar(converter: ConverterKind, args: &[String]) -> Result<SidecarResult, String> {
+    let sidecar_name = match converter {
         ConverterKind::AiStudio => "google-ai-studio-json-converter",
         ConverterKind::Cherry => "cherry-studio-backup-json-converter",
         ConverterKind::Qwen => "qwen-json-converter",
     };
 
-    let args = build_args(request.converter, &input_path, output_path.as_ref());
     let (mut receiver, _child) = Command::new_sidecar(sidecar_name)
         .map_err(|error| format!("无法创建 sidecar 命令 {sidecar_name}: {error}"))?
         .args(args)
@@ -116,11 +175,10 @@ async fn run_conversion(request: ConvertRequest) -> Result<ConvertResponse, Stri
         }
     }
 
-    Ok(ConvertResponse {
+    Ok(SidecarResult {
         exit_code,
         stdout: stdout.join("\n").trim().to_string(),
         stderr: stderr.join("\n").trim().to_string(),
-        output_path: predicted_output.display().to_string(),
     })
 }
 
@@ -134,152 +192,12 @@ fn reveal_in_file_manager(path: String) -> Result<(), String> {
     reveal_path(&target).map_err(|error| format!("无法打开输出位置 {}: {error}", target.display()))
 }
 
-fn build_args(
-    converter: ConverterKind,
-    input_path: &Path,
-    output_path: Option<&PathBuf>,
-) -> Vec<String> {
-    match converter {
-        ConverterKind::AiStudio => {
-            let mut args = vec![input_path.display().to_string()];
-            if let Some(path) = output_path {
-                args.push("-o".to_string());
-                args.push(path.display().to_string());
-            }
-            args
-        }
-        ConverterKind::Cherry => {
-            let mut args = vec![input_path.display().to_string()];
-            if let Some(path) = output_path {
-                args.push("-o".to_string());
-                args.push(path.display().to_string());
-            }
-            args
-        }
-        ConverterKind::Qwen => {
-            let mut args = vec![
-                "convert".to_string(),
-                "-i".to_string(),
-                input_path.display().to_string(),
-                "--progress".to_string(),
-                "false".to_string(),
-            ];
-            if let Some(path) = output_path {
-                args.push("-o".to_string());
-                args.push(path.display().to_string());
-            }
-            args
-        }
-    }
-}
-
-fn predict_output_path(
-    converter: ConverterKind,
-    input_path: &Path,
-    output_path: Option<&PathBuf>,
-) -> Result<PathBuf, String> {
+fn build_args(input_path: &Path, output_path: Option<&PathBuf>) -> Vec<String> {
+    let mut args = vec![input_path.display().to_string()];
     if let Some(path) = output_path {
-        return Ok(path.clone());
+        args.extend(["-o".to_string(), path.display().to_string()]);
     }
-
-    match converter {
-        ConverterKind::Cherry => Ok(input_path
-            .parent()
-            .unwrap_or_else(|| Path::new("."))
-            .join("cherry-studio-export")),
-        ConverterKind::AiStudio => {
-            if input_path.is_dir() {
-                return Ok(input_path.to_path_buf());
-            }
-
-            let mut default_output = input_path.to_path_buf();
-            if default_output.set_extension("md") {
-                Ok(default_output)
-            } else {
-                let parent = input_path.parent().unwrap_or_else(|| Path::new("."));
-                let file_name = input_path
-                    .file_name()
-                    .and_then(|value| value.to_str())
-                    .filter(|value| !value.is_empty())
-                    .map(|value| format!("{value}.md"))
-                    .unwrap_or_else(|| "output.md".to_string());
-                Ok(parent.join(file_name))
-            }
-        }
-        ConverterKind::Qwen => {
-            if input_path.is_dir() {
-                Ok(input_path.to_path_buf())
-            } else {
-                input_path
-                    .parent()
-                    .map(Path::to_path_buf)
-                    .ok_or_else(|| "无法推断 Qwen 默认输出目录。".to_string())
-            }
-        }
-    }
-}
-
-fn detect_converter_kind_from_file(path: &Path) -> Result<ConverterKind, String> {
-    let extension = path
-        .extension()
-        .and_then(|value| value.to_str())
-        .map(|value| value.to_ascii_lowercase());
-
-    if extension.as_deref() != Some("json") {
-        return Err(format!(
-            "仅支持 JSON 导出文件，当前文件不是 JSON：{}",
-            path.display()
-        ));
-    }
-
-    let bytes =
-        fs::read(path).map_err(|error| format!("无法读取输入文件 {}: {error}", path.display()))?;
-    let value: Value = serde_json::from_slice(&bytes)
-        .map_err(|error| format!("文件不是有效的 JSON：{} ({error})", path.display()))?;
-
-    detect_converter_kind(&value).ok_or_else(|| {
-        format!(
-            "暂不支持这个 JSON 导出格式：{}。当前支持 Google AI Studio、Cherry Studio、Qwen。",
-            path.display()
-        )
-    })
-}
-
-fn detect_converter_kind(value: &Value) -> Option<ConverterKind> {
-    match value {
-        Value::Object(obj) => {
-            if obj.contains_key("indexedDB") || obj.contains_key("localStorage") {
-                return Some(ConverterKind::Cherry);
-            }
-
-            if obj.contains_key("runSettings")
-                || obj.contains_key("chunkedPrompt")
-                || obj.contains_key("systemInstruction")
-            {
-                return Some(ConverterKind::AiStudio);
-            }
-
-            if obj.get("data").is_some_and(Value::is_array)
-                || obj.contains_key("chat")
-                || obj.contains_key("messages")
-                || obj.contains_key("meta")
-                || obj.contains_key("chat_type")
-                || obj.contains_key("sub_chat_type")
-            {
-                return Some(ConverterKind::Qwen);
-            }
-
-            None
-        }
-        Value::Array(items) => {
-            if items.iter().all(|item| item.is_object() || item.is_null()) {
-                Some(ConverterKind::Qwen)
-            } else {
-                None
-            }
-        }
-        _ => None,
-    }
+    args
 }
 
 fn directory_contains_json(path: &Path) -> std::io::Result<bool> {
