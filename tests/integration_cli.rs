@@ -50,8 +50,6 @@ fn converts_single_json_to_markdown() {
     Command::cargo_bin("qwen-json-converter")
         .expect("binary")
         .args([
-            "convert",
-            "-i",
             in_dir.join("small.json").to_string_lossy().as_ref(),
             "-o",
             out_dir.to_string_lossy().as_ref(),
@@ -99,8 +97,6 @@ fn wrapped_large_json_splits_into_many_files() {
     Command::cargo_bin("qwen-json-converter")
         .expect("binary")
         .args([
-            "convert",
-            "-i",
             in_dir.join("large.json").to_string_lossy().as_ref(),
             "-o",
             out_dir.to_string_lossy().as_ref(),
@@ -143,8 +139,6 @@ fn directory_mode_preserves_output_tree() {
     Command::cargo_bin("qwen-json-converter")
         .expect("binary")
         .args([
-            "convert",
-            "-i",
             in_dir.to_string_lossy().as_ref(),
             "-o",
             out_dir.to_string_lossy().as_ref(),
