@@ -1,0 +1,69 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Ensure Windows Installer service
+        shell: powershell
+        run: |
+          $svc = Get-Service -Name msiserver -ErrorAction Stop
+          if ($svc.Status -ne 'Running') {
+            Start-Service -Name msiserver
+          }
+          Get-Service -Name msiserver | Format-Table -AutoSize Status, Name, StartType
+
+      - name: Install dependencies
+        run: |
+          cd converter/gui
+          bun install
+
+      - name: Build with Tauri
+        run: |
+          cd converter/gui
+          bun x tauri build --bundles nsis --ci -v
+
+      - name: Collect artifacts
+        id: collect
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTDIR="dist"
+          mkdir -p "$OUTDIR"
+          BUNDLE_DIR="target/release/bundle/nsis"
+          echo "Bundle dir: $BUNDLE_DIR"
+          # 收集 Windows 安装包 (NSIS .exe)
+          find "$BUNDLE_DIR" -maxdepth 1 -type f -name "*.exe" -print -exec cp {} "$OUTDIR"/ \;
+          ls -lah "$OUTDIR"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Release ${{ github.ref_name }}"
+          body: "Automated release for ${{ github.ref_name }}"
+          files: dist/*.exe
+          draft: false
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
