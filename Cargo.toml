@@ -3,6 +3,10 @@ name = "qwen-json-converter"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "qwen"
+path = "src/main.rs"
+
 [dependencies]
 anyhow = "1.0"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }

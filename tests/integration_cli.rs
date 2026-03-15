@@ -47,7 +47,7 @@ fn converts_single_json_to_markdown() {
     )
     .expect("write small json");
 
-    Command::cargo_bin("qwen-json-converter")
+    Command::cargo_bin("qwen")
         .expect("binary")
         .args([
             in_dir.join("small.json").to_string_lossy().as_ref(),
@@ -94,7 +94,7 @@ fn wrapped_large_json_splits_into_many_files() {
     )
     .expect("write large json");
 
-    Command::cargo_bin("qwen-json-converter")
+    Command::cargo_bin("qwen")
         .expect("binary")
         .args([
             in_dir.join("large.json").to_string_lossy().as_ref(),
@@ -136,7 +136,7 @@ fn directory_mode_preserves_output_tree() {
     )
     .expect("write two.json");
 
-    Command::cargo_bin("qwen-json-converter")
+    Command::cargo_bin("qwen")
         .expect("binary")
         .args([
             in_dir.to_string_lossy().as_ref(),
@@ -158,7 +158,7 @@ fn drag_drop_style_invocation_works() {
     let source = in_dir.join("drag.json");
     fs::write(&source, small_session_json("drag q", "drag a")).expect("write drag json");
 
-    Command::cargo_bin("qwen-json-converter")
+    Command::cargo_bin("qwen")
         .expect("binary")
         .arg(source.to_string_lossy().as_ref())
         .assert()
