@@ -8,7 +8,7 @@
     "withGlobalTauri": true
   },
   "package": {
-    "productName": "Converters",
+    "productName": "afterchat-converter",
     "version": "0.1.0"
   },
   "tauri": {
@@ -34,9 +34,9 @@
         "icons/icon.ico"
       ],
       "externalBin": [
-        "bin/google-ai-studio-json-converter",
-        "bin/cherry-studio-backup-json-converter",
-        "bin/qwen-json-converter"
+        "bin/ai-studio",
+        "bin/cherry",
+        "bin/qwen"
       ],
       "identifier": "com.openai.converters"
     },

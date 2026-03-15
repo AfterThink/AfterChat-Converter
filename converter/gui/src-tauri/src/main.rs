@@ -180,9 +180,9 @@ struct SidecarResult {
 
 async fn try_sidecar(converter: ConverterKind, args: &[String]) -> Result<SidecarResult, String> {
     let sidecar_name = match converter {
-        ConverterKind::AiStudio => "google-ai-studio-json-converter",
-        ConverterKind::Cherry => "cherry-studio-backup-json-converter",
-        ConverterKind::Qwen => "qwen-json-converter",
+        ConverterKind::AiStudio => "ai-studio",
+        ConverterKind::Cherry => "cherry",
+        ConverterKind::Qwen => "qwen",
     };
 
     let (mut receiver, _child) = Command::new_sidecar(sidecar_name)

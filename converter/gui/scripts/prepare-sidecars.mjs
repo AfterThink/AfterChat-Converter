@@ -13,9 +13,9 @@ const profile = isRelease ? "release" : "debug";
 const exeSuffix = process.platform === "win32" ? ".exe" : "";
 
 const binaries = [
-  "google-ai-studio-json-converter",
-  "cherry-studio-backup-json-converter",
-  "qwen-json-converter",
+  { pkg: "google-ai-studio-json-converter", bin: "ai-studio" },
+  { pkg: "cherry-studio-backup-json-converter", bin: "cherry" },
+  { pkg: "qwen-json-converter", bin: "qwen" },
 ];
 
 mkdirSync(tauriBinDir, { recursive: true });
@@ -23,9 +23,9 @@ mkdirSync(tauriBinDir, { recursive: true });
 const hostTriple = getHostTriple();
 buildWorkspaceBinaries();
 
-for (const name of binaries) {
-  const source = resolve(repoRoot, "target", profile, `${name}${exeSuffix}`);
-  const target = resolve(tauriBinDir, `${name}-${hostTriple}${exeSuffix}`);
+for (const { bin } of binaries) {
+  const source = resolve(repoRoot, "target", profile, `${bin}${exeSuffix}`);
+  const target = resolve(tauriBinDir, `${bin}-${hostTriple}${exeSuffix}`);
 
   if (!existsSync(source)) {
     throw new Error(`未找到 sidecar 二进制：${source}`);
@@ -44,9 +44,9 @@ for (const name of binaries) {
 
   if (needsCopy) {
     copyFileSync(source, target);
-    console.log(`copied ${name} -> ${target}`);
+    console.log(`copied ${bin} -> ${target}`);
   } else {
-    console.log(`skipped ${name} (up to date)`);
+    console.log(`skipped ${bin} (up to date)`);
   }
 }
 
@@ -56,8 +56,8 @@ function buildWorkspaceBinaries() {
     args.push("--release");
   }
 
-  for (const name of binaries) {
-    args.push("-p", name);
+  for (const { pkg } of binaries) {
+    args.push("-p", pkg);
   }
 
   execFileSync("cargo", args, {
