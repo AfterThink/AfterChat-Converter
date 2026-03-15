@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use rayon::prelude::*;
 use regex::Regex;
@@ -155,8 +155,7 @@ fn main() -> Result<()> {
     let input_path = args.input_file;
 
     if !input_path.exists() {
-        println!("找不到文件: {}", input_path.display());
-        return Ok(());
+        bail!("找不到文件: {}", input_path.display());
     }
 
     let output_dir = if let Some(dir) = args.output_dir {
@@ -174,6 +173,13 @@ fn main() -> Result<()> {
     let reader = BufReader::new(file);
     
     let root: Root = serde_json::from_reader(reader).context("Failed to parse JSON")?;
+
+    if root.indexed_db.topics.is_empty()
+        && root.local_storage.is_empty()
+        && root.indexed_db.message_blocks.is_empty()
+    {
+        bail!("Not a Cherry Studio export: no topics, localStorage, or message_blocks found");
+    }
 
     // 1. Parse assistants
     let mut assistants_map: HashMap<String, AssistantInfo> = HashMap::new();
@@ -221,8 +227,7 @@ fn main() -> Result<()> {
     let topics = &root.indexed_db.topics;
     
     if topics.is_empty() {
-        println!("未找到任何对话主题 (topics)");
-        return Ok(());
+        bail!("未找到任何对话主题 (topics)");
     }
 
     println!("找到 {} 个对话主题，开始转换...", topics.len());
