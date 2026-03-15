@@ -33,7 +33,11 @@ const i18n = {
     switchToZh: "Switch to Chinese",
     switchToEn: "Switch to English",
     aboutDesc: "A simple tool to convert conversation history JSON files to Markdown.",
-    supportedFormats: "Supported Formats:"
+    supportedFormats: "Supported Formats:",
+    importHint: "Drop files to import",
+    importProcessing: "Importing...",
+    importSuccess: "Import complete",
+    importError: "Import failed",
   },
   zh: {
     inplace: "同目录输出",
@@ -48,7 +52,11 @@ const i18n = {
     switchToZh: "切换到中文",
     switchToEn: "切换到英文",
     aboutDesc: "一个简单的工具，用于将对话历史 JSON 文件转换为 Markdown。",
-    supportedFormats: "支持的格式："
+    supportedFormats: "支持的格式：",
+    importHint: "拖拽文件以导入",
+    importProcessing: "导入中...",
+    importSuccess: "导入完成",
+    importError: "导入失败",
   }
 };
 
@@ -81,6 +89,8 @@ const state = {
   resetTimer: null,
   outputBesideSource: loadOutputMode(),
   lang: loadLang(),
+  importMode: false,
+  fixedOutputPath: null,
 };
 
 const elements = {
@@ -346,6 +356,7 @@ async function handleDrop(paths) {
 }
 
 async function resolveOutputPath(input, converter) {
+  if (state.importMode) return state.fixedOutputPath;
   if (state.outputBesideSource) return undefined;
 
   state.phase = "selecting";
@@ -413,11 +424,12 @@ function render() {
   elements.icon.innerHTML = ICONS[state.phase];
   
   // 更新状态文字
-  if (state.phase === "ready") elements.hintLabel.textContent = t.hint;
+  const im = state.importMode;
+  if (state.phase === "ready") elements.hintLabel.textContent = im ? t.importHint : t.hint;
   else if (state.phase === "selecting") elements.hintLabel.textContent = t.selecting;
-  else if (state.phase === "processing") elements.hintLabel.textContent = t.processing;
-  else if (state.phase === "success") elements.hintLabel.textContent = t.success;
-  else if (state.phase === "error") elements.hintLabel.textContent = t.error;
+  else if (state.phase === "processing") elements.hintLabel.textContent = im ? t.importProcessing : t.processing;
+  else if (state.phase === "success") elements.hintLabel.textContent = im ? t.importSuccess : t.success;
+  else if (state.phase === "error") elements.hintLabel.textContent = im ? t.importError : t.error;
 
   elements.detailsText.textContent = state.errorMessage;
   elements.detailsPanel.classList.toggle("hidden", state.phase !== "error" || !state.errorMessage);
@@ -431,4 +443,15 @@ function render() {
 
 updateI18nUI();
 bindWindowDragging();
-render();
+
+// 获取启动配置，判断是否为导入模式
+invoke("get_launch_config").then((launchConfig) => {
+  state.importMode = !!launchConfig.outputPath;
+  state.fixedOutputPath = launchConfig.outputPath || null;
+  if (state.importMode) {
+    elements.outputPreference.classList.add("hidden");
+  }
+  render();
+}).catch(() => {
+  render();
+});

@@ -8,6 +8,31 @@ use serde::{Deserialize, Serialize};
 use tauri::api::process::{Command, CommandEvent};
 use tauri::Manager;
 
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct LaunchConfig {
+    output_path: Option<String>,
+}
+
+fn parse_launch_config() -> LaunchConfig {
+    let args: Vec<String> = std::env::args().collect();
+    let mut output_path = None;
+    let mut i = 1;
+    while i < args.len() {
+        if (args[i] == "-o" || args[i] == "--output") && i + 1 < args.len() {
+            output_path = Some(args[i + 1].clone());
+            break;
+        }
+        i += 1;
+    }
+    LaunchConfig { output_path }
+}
+
+#[tauri::command]
+fn get_launch_config(config: tauri::State<LaunchConfig>) -> LaunchConfig {
+    config.inner().clone()
+}
+
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum ConverterKind {
@@ -270,7 +295,9 @@ fn reveal_path(target: &Path) -> std::io::Result<()> {
 }
 
 fn main() {
+    let config = parse_launch_config();
     tauri::Builder::default()
+        .manage(config)
         .setup(|app| {
             if let Some(window) = app.get_window("main") {
                 let _ = window.center();
@@ -279,6 +306,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            get_launch_config,
             inspect_input,
             run_conversion,
             reveal_in_file_manager
