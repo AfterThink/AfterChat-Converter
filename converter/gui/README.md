@@ -105,6 +105,17 @@ Converters.exe -o C:\some\output
 - 拖入文件后直接转换到 `-o` 指定的目录，不弹出保存对话框
 - 无 `-o` 参数启动时行为完全不变
 
+### 指定语言（CLI `-l`）
+
+通过 `-l` / `--lang` 指定界面语言，使调用方与 GUI 保持一致：
+
+```powershell
+Converters.exe -o C:\some\output -l zh
+Converters.exe -l en
+```
+
+支持的值：`zh`、`en`。未指定时沿用上次选择或跟随系统语言。
+
 ### 1. `bun install` 很慢
 
 已经默认切到 `npmmirror`。如果还慢，可以手动确认：

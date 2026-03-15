@@ -12,20 +12,28 @@ use tauri::Manager;
 #[serde(rename_all = "camelCase")]
 struct LaunchConfig {
     output_path: Option<String>,
+    lang: Option<String>,
 }
 
 fn parse_launch_config() -> LaunchConfig {
     let args: Vec<String> = std::env::args().collect();
     let mut output_path = None;
+    let mut lang = None;
     let mut i = 1;
     while i < args.len() {
         if (args[i] == "-o" || args[i] == "--output") && i + 1 < args.len() {
             output_path = Some(args[i + 1].clone());
-            break;
+            i += 2;
+            continue;
+        }
+        if (args[i] == "-l" || args[i] == "--lang") && i + 1 < args.len() {
+            lang = Some(args[i + 1].clone());
+            i += 2;
+            continue;
         }
         i += 1;
     }
-    LaunchConfig { output_path }
+    LaunchConfig { output_path, lang }
 }
 
 #[tauri::command]

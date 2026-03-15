@@ -448,9 +448,14 @@ bindWindowDragging();
 invoke("get_launch_config").then((launchConfig) => {
   state.importMode = !!launchConfig.outputPath;
   state.fixedOutputPath = launchConfig.outputPath || null;
+  if (launchConfig.lang && i18n[launchConfig.lang]) {
+    state.lang = launchConfig.lang;
+    localStorage.setItem("converters.lang", state.lang);
+  }
   if (state.importMode) {
     elements.outputPreference.classList.add("hidden");
   }
+  updateI18nUI();
   render();
 }).catch(() => {
   render();
