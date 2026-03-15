@@ -14,15 +14,15 @@ use walkdir::WalkDir;
 // Use #[serde(default)] for booleans that might be missing (defaults to false)
 // Use #[serde(rename_all = "camelCase")] to map JSON keys to Rust fields
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct SafetySetting {
-    // Keep fields even if unused for complete deserialization
-    #[allow(dead_code)]
-    category: String,
-    #[allow(dead_code)]
-    threshold: String,
-}
+// #[derive(Deserialize, Debug)]
+// #[serde(rename_all = "camelCase")]
+// struct SafetySetting {
+//     // Keep fields even if unused for complete deserialization
+//     #[allow(dead_code)]
+//     category: String,
+//     #[allow(dead_code)]
+//     threshold: String,
+// }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
