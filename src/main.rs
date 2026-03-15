@@ -1,6 +1,6 @@
 // Writen by Gemini 2.5 Pro Experimental 03-25, 2025/03/30
 
-use anyhow::{Context, Result}; // Use anyhow for easy error handling
+use anyhow::{bail, Context, Result}; // Use anyhow for easy error handling
 use clap::Parser;
 use filetime::{set_file_times, FileTime};
 use log::{error, info, warn}; // Logging macros
@@ -269,6 +269,13 @@ fn converter(input_json_path: &PathBuf, output_md_path: &PathBuf) -> Result<()> 
         )
     })?;
     info!("JSON content parsed successfully.");
+
+    if root.run_settings.is_none()
+        && root.system_instruction.is_none()
+        && root.chunked_prompt.is_none()
+    {
+        bail!("Not a Google AI Studio export: no runSettings, systemInstruction, or chunkedPrompt found");
+    }
 
     // --- Generate Markdown Content ---
     let mut markdown_lines = Vec::new();
