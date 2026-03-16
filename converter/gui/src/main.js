@@ -32,9 +32,9 @@ const i18n = {
     errorTitle: "Why it failed",
     switchToZh: "Switch to Chinese",
     switchToEn: "Switch to English",
-    aboutDesc: "A simple tool to convert conversation history files to Markdown.",
-    helpModeOpen: "Open mode: drop a supported export file to convert it, and choose an output location when needed.",
-    helpModeImport: "Import mode: drop supported export files to import them into the preset destination folder.",
+    aboutDesc: "",
+    helpModeOpen: "Drag in supported export files from other LLM providers and convert to markdown format.",
+    helpModeImport: "Drag in supported export files from other LLM providers into AfterChat.",
     supportedFormats: "Supported Formats:",
     importHint: "Drop files to import",
     importProcessing: "Importing...",
@@ -53,9 +53,9 @@ const i18n = {
     errorTitle: "失败原因",
     switchToZh: "切换到中文",
     switchToEn: "切换到英文",
-    aboutDesc: "一个简单的工具，用于将对话历史文件转换为 Markdown。",
-    helpModeOpen: "普通打开模式：拖入受支持的导出文件进行转换，并在需要时选择输出位置。",
-    helpModeImport: "导入模式：拖入受支持的导出文件后，会直接导入到预设目标文件夹。",
+    aboutDesc: "",
+    helpModeOpen: "拖入受支持的、从其他 LLM 供应商的导出文件，转换为 markdown 格式。",
+    helpModeImport: "拖入受支持的、从其他 LLM 供应商的导出文件，导入到 AfterChat。",
     supportedFormats: "支持的格式：",
     importHint: "拖拽文件以导入",
     importProcessing: "导入中...",
@@ -142,7 +142,7 @@ function updateI18nUI() {
   elements.icon.title = t.chooseInput;
   elements.icon.setAttribute("aria-label", t.chooseInput);
   // Update modal texts
-  if (elements.aboutDesc) elements.aboutDesc.textContent = t.aboutDesc;
+  // if (elements.aboutDesc) elements.aboutDesc.textContent = t.aboutDesc;
   if (elements.helpModeDesc) {
     elements.helpModeDesc.textContent = state.importMode ? t.helpModeImport : t.helpModeOpen;
   }
