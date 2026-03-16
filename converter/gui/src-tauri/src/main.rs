@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 
 use serde::{Deserialize, Serialize};
-use tauri::api::process::{Command, CommandEvent};
 use tauri::Manager;
+use tauri::api::process::{Command, CommandEvent};
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -117,22 +117,10 @@ async fn run_conversion(request: ConvertRequest) -> Result<ConvertResponse, Stri
     let output_path = request.output_path.as_ref().map(PathBuf::from);
     let args = build_args(&input_path, output_path.as_ref());
 
-    let predicted_output = match &output_path {
-        Some(path) => path.clone(),
-        None => {
-            if input_path.is_dir() {
-                input_path.clone()
-            } else {
-                input_path
-                    .parent()
-                    .map(Path::to_path_buf)
-                    .unwrap_or_else(|| PathBuf::from("."))
-            }
-        }
-    };
-
     if let Some(converter) = request.converter {
         let result = try_sidecar(converter, &args).await?;
+        let predicted_output =
+            predict_output_path(Some(converter), &input_path, output_path.as_ref());
         return Ok(ConvertResponse {
             exit_code: result.exit_code,
             stdout: result.stdout,
@@ -146,6 +134,8 @@ async fn run_conversion(request: ConvertRequest) -> Result<ConvertResponse, Stri
     for kind in ALL_CONVERTERS {
         let result = try_sidecar(kind, &args).await?;
         if result.exit_code == 0 {
+            let predicted_output =
+                predict_output_path(Some(kind), &input_path, output_path.as_ref());
             return Ok(ConvertResponse {
                 exit_code: result.exit_code,
                 stdout: result.stdout,
@@ -160,6 +150,7 @@ async fn run_conversion(request: ConvertRequest) -> Result<ConvertResponse, Stri
             .join("\n");
     }
 
+    let predicted_output = predict_output_path(None, &input_path, output_path.as_ref());
     Ok(ConvertResponse {
         exit_code: 1,
         stdout: String::new(),
@@ -213,6 +204,34 @@ async fn try_sidecar(converter: ConverterKind, args: &[String]) -> Result<Sideca
         stdout: stdout.join("\n").trim().to_string(),
         stderr: stderr.join("\n").trim().to_string(),
     })
+}
+
+fn predict_output_path(
+    converter: Option<ConverterKind>,
+    input_path: &Path,
+    output_path: Option<&PathBuf>,
+) -> PathBuf {
+    if let Some(path) = output_path {
+        return path.clone();
+    }
+
+    match converter {
+        Some(ConverterKind::Cherry) => input_path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("cherry-studio-export"),
+        _ => {
+            if input_path.is_dir() {
+                input_path.to_path_buf()
+            } else {
+                input_path
+                    .parent()
+                    .map(Path::to_path_buf)
+                    .unwrap_or_else(|| PathBuf::from("."))
+            }
+        }
+    }
 }
 
 #[tauri::command]

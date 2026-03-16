@@ -368,6 +368,7 @@ input:checked + .slider::after {
 .card-footer {
   padding: var(--spacing-lg);
   min-height: 88px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -406,21 +407,23 @@ input:checked + .slider::after {
 /* Error Panel */
 .error-panel {
   width: 100%;
+  max-width: 100%;
   text-align: left;
   background: linear-gradient(180deg, #fff7f7 0%, #fff3f2 100%);
   border: 1px solid rgba(255, 59, 48, 0.14);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
-  margin-top: var(--spacing-sm);
-  font-size: 12px;
-  box-shadow: 0 10px 18px rgba(255, 59, 48, 0.08);
+  padding: 8px 10px;
+  margin-top: 10px;
+  font-size: 10px;
+  box-shadow: 0 8px 14px rgba(255, 59, 48, 0.07);
   animation: fade-up-in 0.28s ease-out;
 }
 
 .error-heading {
   color: var(--error-color);
   font-weight: 600;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+  line-height: 1.2;
 }
 
 .error-panel pre {
@@ -428,9 +431,25 @@ input:checked + .slider::after {
   word-break: break-all;
   color: #5c2b26;
   font-family: monospace;
-  max-height: 108px;
+  font-size: 10px;
+  max-height: 44px;
   overflow-y: auto;
-  line-height: 1.45;
+  line-height: 1.25;
+}
+
+.card[data-phase="error"] .card-content {
+  justify-content: flex-start;
+  padding-top: 24px;
+  padding-bottom: 8px;
+}
+
+.card[data-phase="error"] .content-options {
+  margin-top: 14px;
+  transform: none;
+}
+
+.card[data-phase="error"] .card-footer {
+  min-height: 92px;
 }
 
 .hidden {

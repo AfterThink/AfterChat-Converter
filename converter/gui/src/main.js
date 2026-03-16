@@ -32,7 +32,9 @@ const i18n = {
     errorTitle: "Why it failed",
     switchToZh: "Switch to Chinese",
     switchToEn: "Switch to English",
-    aboutDesc: "A simple tool to convert conversation history JSON files to Markdown.",
+    aboutDesc: "A simple tool to convert conversation history files to Markdown.",
+    helpModeOpen: "Open mode: drop a supported export file to convert it, and choose an output location when needed.",
+    helpModeImport: "Import mode: drop supported export files to import them into the preset destination folder.",
     supportedFormats: "Supported Formats:",
     importHint: "Drop files to import",
     importProcessing: "Importing...",
@@ -51,7 +53,9 @@ const i18n = {
     errorTitle: "失败原因",
     switchToZh: "切换到中文",
     switchToEn: "切换到英文",
-    aboutDesc: "一个简单的工具，用于将对话历史 JSON 文件转换为 Markdown。",
+    aboutDesc: "一个简单的工具，用于将对话历史文件转换为 Markdown。",
+    helpModeOpen: "普通打开模式：拖入受支持的导出文件进行转换，并在需要时选择输出位置。",
+    helpModeImport: "导入模式：拖入受支持的导出文件后，会直接导入到预设目标文件夹。",
     supportedFormats: "支持的格式：",
     importHint: "拖拽文件以导入",
     importProcessing: "导入中...",
@@ -113,6 +117,7 @@ const elements = {
   modalClose: document.querySelector("#modal-close"),
   appVersion: document.querySelector("#app-version"),
   aboutDesc: document.querySelector("#i18n-about-desc"),
+  helpModeDesc: document.querySelector("#i18n-help-mode-desc"),
   supportedFormats: document.querySelector("#i18n-supported-formats"),
   errorTitle: document.querySelector("#i18n-error-title"),
   btnClose: document.querySelector("#btn-close"),
@@ -138,6 +143,9 @@ function updateI18nUI() {
   elements.icon.setAttribute("aria-label", t.chooseInput);
   // Update modal texts
   if (elements.aboutDesc) elements.aboutDesc.textContent = t.aboutDesc;
+  if (elements.helpModeDesc) {
+    elements.helpModeDesc.textContent = state.importMode ? t.helpModeImport : t.helpModeOpen;
+  }
   if (elements.supportedFormats) elements.supportedFormats.textContent = t.supportedFormats;
 }
 
@@ -363,7 +371,7 @@ async function resolveOutputPath(input, converter) {
   render();
 
   const t = getT();
-  const isDirOutput = input.isDir || converter === null;
+  const isDirOutput = input.isDir || converterOutputsDirectory(converter);
 
   if (isDirOutput) {
     const picked = await openDialog({
@@ -388,8 +396,13 @@ function buildSuggestedPath(input) {
   return dotIndex > 0 ? `${name.slice(0, dotIndex)}.md` : `${name}.md`;
 }
 
+function converterOutputsDirectory(converter) {
+  return converter === null || converter === "cherry";
+}
+
 function selectConverter(input) {
   const name = input.name.toLowerCase();
+  if (name.endsWith(".zip") && name.includes("cherry")) return "cherry";
   if (name.includes("cherry")) return "cherry";
   if (name.includes("qwen")) return "qwen";
   if (name.includes("ai-studio") || name.includes("aistudio") || name.includes("gemini")) return "ai-studio";
