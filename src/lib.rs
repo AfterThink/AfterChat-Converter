@@ -66,7 +66,7 @@ enum Role {
 
 #[derive(Debug, Clone)]
 enum ParsedInput {
-    Single(Session),
+    Single(Box<Session>),
     Sessions(Vec<Session>),
     Wrapped {
         request_id: Option<String>,
@@ -442,11 +442,11 @@ fn process_one_json_file(
                 enable_inner_progress,
             )?;
 
-            if let Ok(metadata) = fs::metadata(primary_source) {
-                if let Ok(modified) = metadata.modified() {
-                    let mtime = FileTime::from_system_time(modified);
-                    let _ = set_file_times(&output_dir, mtime, mtime);
-                }
+            if let Ok(metadata) = fs::metadata(primary_source)
+                && let Ok(modified) = metadata.modified()
+            {
+                let mtime = FileTime::from_system_time(modified);
+                let _ = set_file_times(&output_dir, mtime, mtime);
             }
 
             Ok(count)
@@ -558,18 +558,18 @@ fn write_rendered_session(path: &Path, rendered: &RenderedSession) -> Result<()>
 
 fn parse_input_payload(value: Value) -> Result<ParsedInput> {
     if let Some(obj) = value.as_object() {
-        if let Some(data_val) = obj.get("data") {
-            if let Some(arr) = data_val.as_array() {
-                let sessions = parse_sessions_from_array(arr)?;
-                let request_id = obj
-                    .get("request_id")
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned);
-                return Ok(ParsedInput::Wrapped {
-                    request_id,
-                    sessions,
-                });
-            }
+        if let Some(data_val) = obj.get("data")
+            && let Some(arr) = data_val.as_array()
+        {
+            let sessions = parse_sessions_from_array(arr)?;
+            let request_id = obj
+                .get("request_id")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned);
+            return Ok(ParsedInput::Wrapped {
+                request_id,
+                sessions,
+            });
         }
 
         let session: Session = serde_json::from_value(Value::Object(obj.clone()))
@@ -577,15 +577,15 @@ fn parse_input_payload(value: Value) -> Result<ParsedInput> {
         if !session_has_message_payload(&session) {
             bail!("object does not look like a Qwen session: no message payload found");
         }
-        return Ok(ParsedInput::Single(session));
+        return Ok(ParsedInput::Single(Box::new(session)));
     }
 
     if let Some(arr) = value.as_array() {
         let sessions = parse_sessions_from_array(arr)?;
         if sessions.len() == 1 {
-            return Ok(ParsedInput::Single(
+            return Ok(ParsedInput::Single(Box::new(
                 sessions.into_iter().next().expect("one session"),
-            ));
+            )));
         }
         return Ok(ParsedInput::Sessions(sessions));
     }
@@ -1001,10 +1001,10 @@ fn normalize_model_namespace(model_name: &str) -> String {
 }
 
 fn detect_tags(session: &Session) -> Vec<String> {
-    if let Some(tags) = extract_tags_from_value(session.meta.get("tags")) {
-        if !tags.is_empty() {
-            return tags;
-        }
+    if let Some(tags) = extract_tags_from_value(session.meta.get("tags"))
+        && !tags.is_empty()
+    {
+        return tags;
     }
 
     let mut fallback = Vec::new();
@@ -1054,14 +1054,15 @@ fn extract_tags_from_value(value: Option<&Value>) -> Option<Vec<String>> {
             return None;
         }
 
-        if cleaned.starts_with('[') && cleaned.ends_with(']') {
-            if let Ok(parsed) = serde_json::from_str::<Vec<String>>(cleaned) {
-                if looks_like_garbled_tags(&parsed) {
-                    warn!("ignore garbled meta.tags string payload");
-                    return None;
-                }
-                return Some(normalize_tags(parsed));
+        if cleaned.starts_with('[')
+            && cleaned.ends_with(']')
+            && let Ok(parsed) = serde_json::from_str::<Vec<String>>(cleaned)
+        {
+            if looks_like_garbled_tags(&parsed) {
+                warn!("ignore garbled meta.tags string payload");
+                return None;
             }
+            return Some(normalize_tags(parsed));
         }
 
         let tags = split_tag_text(cleaned);
@@ -1162,10 +1163,10 @@ fn normalize_tags(tags: Vec<String>) -> Vec<String> {
 }
 
 fn extract_plain_content(message: &MessageNode) -> String {
-    if let Some(content) = message.content.as_deref() {
-        if !content.trim().is_empty() {
-            return content.to_string();
-        }
+    if let Some(content) = message.content.as_deref()
+        && !content.trim().is_empty()
+    {
+        return content.to_string();
     }
 
     let mut chunks = Vec::new();
@@ -1322,9 +1323,7 @@ fn sanitize_file_name(input: &str) -> String {
     for ch in input.chars() {
         let is_invalid =
             matches!(ch, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') || ch.is_control();
-        if is_invalid {
-            out.push('_');
-        } else if ch.is_whitespace() {
+        if is_invalid || ch.is_whitespace() {
             out.push('_');
         } else {
             out.push(ch);
