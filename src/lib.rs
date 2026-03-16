@@ -142,6 +142,15 @@ struct MessageNode {
     sub_chat_type: Option<String>,
 }
 
+fn session_has_message_payload(session: &Session) -> bool {
+    !session.messages.is_empty()
+        || session
+            .chat
+            .as_ref()
+            .and_then(|chat| chat.history.as_ref())
+            .is_some_and(|history| !history.messages.is_empty())
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct MessageContent {
     #[serde(default)]
@@ -565,6 +574,9 @@ fn parse_input_payload(value: Value) -> Result<ParsedInput> {
 
         let session: Session = serde_json::from_value(Value::Object(obj.clone()))
             .context("failed to parse session object")?;
+        if !session_has_message_payload(&session) {
+            bail!("object does not look like a Qwen session: no message payload found");
+        }
         return Ok(ParsedInput::Single(session));
     }
 
@@ -603,7 +615,17 @@ fn parse_sessions_from_array(arr: &[Value]) -> Result<Vec<Session>> {
         }
 
         match serde_json::from_value::<Session>(item.clone()) {
-            Ok(session) => sessions.push(session),
+            Ok(session) => {
+                if session_has_message_payload(&session) {
+                    sessions.push(session);
+                } else {
+                    skipped += 1;
+                    warn!(
+                        "skip object at index {} because it has no Qwen message payload",
+                        idx
+                    );
+                }
+            }
             Err(err) => {
                 skipped += 1;
                 warn!("skip invalid session item at index {}: {}", idx, err);
@@ -1373,7 +1395,21 @@ mod tests {
             "success": true,
             "request_id": "req-1",
             "data": [
-                { "id": "a", "title": "A", "chat": { "history": { "messages": {} } } }
+                {
+                    "id": "a",
+                    "title": "A",
+                    "chat": {
+                        "history": {
+                            "messages": {
+                                "u1": {
+                                    "id": "u1",
+                                    "role": "user",
+                                    "content": "hello"
+                                }
+                            }
+                        }
+                    }
+                }
             ]
         });
 

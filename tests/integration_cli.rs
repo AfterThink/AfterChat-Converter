@@ -166,3 +166,43 @@ fn drag_drop_style_invocation_works() {
 
     assert!(in_dir.join("demo.md").exists());
 }
+
+#[test]
+fn rejects_arbitrary_json_object_without_messages() {
+    let tmp = tempdir().expect("create temp dir");
+    let in_dir = tmp.path().join("in");
+    let out_dir = tmp.path().join("out");
+    fs::create_dir_all(&in_dir).expect("create input dir");
+    let source = in_dir.join("tauri.conf.json");
+
+    fs::write(
+        &source,
+        serde_json::json!({
+            "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+            "package": {
+                "productName": "AfterChat Converter"
+            },
+            "tauri": {
+                "windows": [
+                    {
+                        "title": "main"
+                    }
+                ]
+            }
+        })
+        .to_string(),
+    )
+    .expect("write arbitrary json");
+
+    Command::cargo_bin("qwen")
+        .expect("binary")
+        .args([
+            source.to_string_lossy().as_ref(),
+            "-o",
+            out_dir.to_string_lossy().as_ref(),
+        ])
+        .assert()
+        .failure();
+
+    assert!(!out_dir.join("session.md").exists());
+}
