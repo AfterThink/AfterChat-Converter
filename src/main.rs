@@ -308,10 +308,6 @@ fn main() -> Result<()> {
         parent.join("cherry-studio-export")
     };
 
-    if !output_dir.exists() {
-        fs::create_dir_all(&output_dir)?;
-    }
-
     let root = load_root(&input_path)?;
 
     if root.indexed_db.topics.is_empty()
@@ -376,6 +372,10 @@ fn main() -> Result<()> {
 
     if topics.is_empty() {
         bail!("未找到任何对话主题 (topics)");
+    }
+
+    if !output_dir.exists() {
+        fs::create_dir_all(&output_dir)?;
     }
 
     println!("找到 {} 个对话主题，开始转换...", topics.len());

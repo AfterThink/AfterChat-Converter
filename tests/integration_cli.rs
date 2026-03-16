@@ -147,3 +147,43 @@ fn converts_zip_backup_by_extracting_data_json() {
 
     let _ = fs::remove_dir_all(tmp);
 }
+
+#[test]
+fn invalid_json_does_not_create_output_dir() {
+    let tmp = create_test_dir();
+    let input_json = tmp.join("tauri.conf.json");
+    let output_dir = tmp.join("cherry-studio-export");
+
+    fs::write(
+        &input_json,
+        serde_json::json!({
+            "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+            "package": {
+                "productName": "AfterChat Converter"
+            },
+            "tauri": {
+                "windows": [
+                    {
+                        "title": "main"
+                    }
+                ]
+            }
+        })
+        .to_string(),
+    )
+    .expect("write arbitrary json");
+
+    Command::cargo_bin("cherry")
+        .expect("binary")
+        .args([
+            input_json.to_string_lossy().as_ref(),
+            "-o",
+            output_dir.to_string_lossy().as_ref(),
+        ])
+        .assert()
+        .failure();
+
+    assert!(!output_dir.exists());
+
+    let _ = fs::remove_dir_all(tmp);
+}
