@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
 use rayon::prelude::*;
 use regex::Regex;
@@ -8,11 +8,13 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufReader, Write};
 use std::path::{Path, PathBuf};
+use std::process::Command as ProcessCommand;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Input JSON file
+    /// Input Cherry backup file (JSON or ZIP)
     #[arg(required = true)]
     input_file: PathBuf,
 
@@ -150,6 +152,147 @@ fn get_created_at_f64(v: &Option<Value>) -> f64 {
     }
 }
 
+fn is_zip_input(path: &Path) -> bool {
+    path.extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case("zip"))
+}
+
+fn load_root_from_json(path: &Path) -> Result<Root> {
+    let file = File::open(path).context(format!("Failed to open {}", path.display()))?;
+    let reader = BufReader::new(file);
+
+    serde_json::from_reader(reader).context("Failed to parse JSON")
+}
+
+#[cfg(target_os = "windows")]
+fn powershell_literal(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
+fn extract_zip_archive(path: &Path, destination: &Path) -> Result<()> {
+    let source = path.to_string_lossy().into_owned();
+    let destination = destination.to_string_lossy().into_owned();
+
+    #[cfg(target_os = "windows")]
+    let command = format!(
+        "Expand-Archive -LiteralPath {} -DestinationPath {} -Force",
+        powershell_literal(&source),
+        powershell_literal(&destination)
+    );
+
+    #[cfg(target_os = "windows")]
+    let output = ProcessCommand::new("powershell")
+        .args(["-NoProfile", "-Command", command.as_str()])
+        .output()
+        .with_context(|| format!("Failed to start extractor for {}", path.display()))?;
+
+    #[cfg(target_os = "macos")]
+    let output = ProcessCommand::new("ditto")
+        .args(["-x", "-k", source.as_str(), destination.as_str()])
+        .output()
+        .with_context(|| format!("Failed to start extractor for {}", path.display()))?;
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let output = ProcessCommand::new("unzip")
+        .args(["-qq", "-o", source.as_str(), "-d", destination.as_str()])
+        .output()
+        .with_context(|| format!("Failed to start extractor for {}", path.display()))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let details = [stderr, stdout]
+        .into_iter()
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    if details.is_empty() {
+        bail!("Failed to extract ZIP archive {}", path.display());
+    }
+
+    bail!(
+        "Failed to extract ZIP archive {}:\n{}",
+        path.display(),
+        details
+    );
+}
+
+fn find_data_json(root: &Path) -> Result<Option<PathBuf>> {
+    let mut stack = vec![root.to_path_buf()];
+
+    while let Some(current) = stack.pop() {
+        for entry in fs::read_dir(&current)
+            .with_context(|| format!("Failed to read extracted directory {}", current.display()))?
+        {
+            let entry = entry?;
+            let entry_path = entry.path();
+
+            if entry.file_type()?.is_dir() {
+                stack.push(entry_path);
+                continue;
+            }
+
+            let is_data_json = entry_path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .is_some_and(|value| value.eq_ignore_ascii_case("data.json"));
+
+            if is_data_json {
+                return Ok(Some(entry_path));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+fn create_temp_extract_dir() -> Result<PathBuf> {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "cherry-studio-extract-{}-{}",
+        std::process::id(),
+        unique
+    ));
+    fs::create_dir_all(&path)
+        .with_context(|| format!("Failed to create temporary directory {}", path.display()))?;
+    Ok(path)
+}
+
+fn load_root_from_zip(path: &Path) -> Result<Root> {
+    let temp_dir = create_temp_extract_dir()?;
+    let result = (|| {
+        extract_zip_archive(path, &temp_dir)?;
+        let data_json = find_data_json(&temp_dir)?
+            .ok_or_else(|| anyhow::anyhow!("ZIP archive does not contain data.json"))?;
+
+        load_root_from_json(&data_json).with_context(|| {
+            format!(
+                "Failed to parse extracted data.json from {}",
+                path.display()
+            )
+        })
+    })();
+
+    let _ = fs::remove_dir_all(&temp_dir);
+    result
+}
+
+fn load_root(input_path: &Path) -> Result<Root> {
+    if is_zip_input(input_path) {
+        return load_root_from_zip(input_path);
+    }
+
+    load_root_from_json(input_path)
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
     let input_path = args.input_file;
@@ -169,10 +312,7 @@ fn main() -> Result<()> {
         fs::create_dir_all(&output_dir)?;
     }
 
-    let file = File::open(&input_path).context(format!("Failed to open {}", input_path.display()))?;
-    let reader = BufReader::new(file);
-    
-    let root: Root = serde_json::from_reader(reader).context("Failed to parse JSON")?;
+    let root = load_root(&input_path)?;
 
     if root.indexed_db.topics.is_empty()
         && root.local_storage.is_empty()
@@ -187,7 +327,9 @@ fn main() -> Result<()> {
 
     if let Some(persist_str) = root.local_storage.get("persist:cherry-studio") {
         if let Ok(persist_data) = serde_json::from_str::<PersistData>(persist_str) {
-            if let Ok(assistants_store) = serde_json::from_str::<AssistantsStore>(&persist_data.assistants) {
+            if let Ok(assistants_store) =
+                serde_json::from_str::<AssistantsStore>(&persist_data.assistants)
+            {
                 let mut all_assistants = Vec::new();
                 if let Some(da) = assistants_store.default_assistant {
                     all_assistants.push(da);
@@ -195,17 +337,23 @@ fn main() -> Result<()> {
                 all_assistants.extend(assistants_store.assistants);
 
                 for assistant in all_assistants {
-                    assistants_map.insert(assistant.id.clone(), AssistantInfo {
-                        name: assistant.name.clone(),
-                        prompt: assistant.prompt.clone(),
-                    });
+                    assistants_map.insert(
+                        assistant.id.clone(),
+                        AssistantInfo {
+                            name: assistant.name.clone(),
+                            prompt: assistant.prompt.clone(),
+                        },
+                    );
 
                     for t in assistant.topics {
-                        topic_metadata_map.insert(t.id.clone(), TopicMetadata {
-                            name: t.name.unwrap_or_else(|| "Untitled".to_string()),
-                            assistant_id: assistant.id.clone(),
-                            created_at: t.created_at,
-                        });
+                        topic_metadata_map.insert(
+                            t.id.clone(),
+                            TopicMetadata {
+                                name: t.name.unwrap_or_else(|| "Untitled".to_string()),
+                                assistant_id: assistant.id.clone(),
+                                created_at: t.created_at,
+                            },
+                        );
                     }
                 }
             }
@@ -225,7 +373,7 @@ fn main() -> Result<()> {
 
     // 3. Process topics
     let topics = &root.indexed_db.topics;
-    
+
     if topics.is_empty() {
         bail!("未找到任何对话主题 (topics)");
     }
@@ -235,12 +383,12 @@ fn main() -> Result<()> {
     // Use Rayon for parallel processing
     topics.par_iter().for_each(|topic| {
         let topic_id = &topic.id;
-        
+
         // Metadata
         let meta = topic_metadata_map.get(topic_id);
         let topic_name = meta.map(|m| m.name.as_str()).unwrap_or("Untitled");
         let assistant_id = meta.map(|m| m.assistant_id.as_str()).unwrap_or("default");
-        
+
         let created_at_str = if let Some(m) = meta {
             if let Some(c) = &m.created_at {
                 c.clone()
@@ -252,7 +400,7 @@ fn main() -> Result<()> {
                 }
             }
         } else {
-             match &topic.created_at {
+            match &topic.created_at {
                 Some(Value::String(s)) => s.clone(),
                 Some(Value::Number(n)) => n.to_string(),
                 _ => "Unknown".to_string(),
@@ -261,7 +409,9 @@ fn main() -> Result<()> {
 
         // Assistant info
         let assistant_info = assistants_map.get(assistant_id);
-        let assistant_name = assistant_info.map(|a| a.name.as_str()).unwrap_or("Assistant");
+        let assistant_name = assistant_info
+            .map(|a| a.name.as_str())
+            .unwrap_or("Assistant");
         let system_instruction = assistant_info.map(|a| a.prompt.as_str()).unwrap_or("");
 
         // Messages
@@ -285,7 +435,7 @@ fn main() -> Result<()> {
 
         let mut md_content = String::new();
         md_content.push_str(&format!("Conversation Transcript: {}\n\n", safe_name));
-        
+
         md_content.push_str("## Metadata\n\n");
         md_content.push_str("### Run Settings\n\n");
 
@@ -352,7 +502,7 @@ fn main() -> Result<()> {
                 let tb = get_created_at_f64(&b.created_at);
                 ta.partial_cmp(&tb).unwrap_or(std::cmp::Ordering::Equal)
             });
-            
+
             let has_thought = msg_blocks_content.iter().any(|b| b.type_ == "thinking");
 
             for b in msg_blocks_content {
@@ -363,11 +513,11 @@ fn main() -> Result<()> {
                 if b.type_ == "thinking" {
                     md_content.push_str(&format!("#### 🤔 Thought Process\n{}\n", b.content));
                 } else {
-                     if has_thought && role != "user" {
-                         md_content.push_str(&format!("#### 💡 Response{}\n\n", b.content));
-                     } else {
-                         md_content.push_str(&format!("{}\n\n", b.content));
-                     }
+                    if has_thought && role != "user" {
+                        md_content.push_str(&format!("#### 💡 Response{}\n\n", b.content));
+                    } else {
+                        md_content.push_str(&format!("{}\n\n", b.content));
+                    }
                 }
             }
         }
@@ -384,47 +534,54 @@ fn main() -> Result<()> {
         let mut counter = 1;
         while file_path.exists() {
             let timestamp_suffix = if created_at_str != "Unknown" {
-                created_at_str.chars().take(19).collect::<String>().replace(['T', ':'], "-")
+                created_at_str
+                    .chars()
+                    .take(19)
+                    .collect::<String>()
+                    .replace(['T', ':'], "-")
             } else {
                 format!("copy{}", counter)
             };
             let new_filename = format!("{}_{}.md", safe_name, timestamp_suffix);
             file_path = assistant_dir.join(&new_filename);
-            
+
             // 如果加了时间戳还是同名，继续添加序号
             if file_path.exists() {
-                let numbered_filename = format!("{}_{}-{}.md", safe_name, timestamp_suffix, counter);
+                let numbered_filename =
+                    format!("{}_{}-{}.md", safe_name, timestamp_suffix, counter);
                 file_path = assistant_dir.join(&numbered_filename);
                 counter += 1;
             } else {
                 break;
             }
         }
-        
+
         if let Ok(mut f) = File::create(&file_path) {
             if let Err(e) = f.write_all(md_content.as_bytes()) {
                 println!("写入文件失败 {:?}: {}", file_path, e);
             } else {
-                 // Update file time
-                 if created_at_str != "Unknown" {
-                     if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&created_at_str.replace("Z", "+00:00")) {
-                         let timestamp = dt.timestamp();
-                         if timestamp > 0 {
-                             let filetime = filetime::FileTime::from_unix_time(timestamp, 0);
-                             let _ = filetime::set_file_times(&file_path, filetime, filetime);
-                             println!("已生成: {} (时间已重置为 {})", safe_name, created_at_str);
-                         } else {
-                             println!("已生成: {} (时间无效)", safe_name);
-                         }
-                     } else {
-                         println!("已生成: {} (时间解析失败)", safe_name);
-                     }
-                 } else {
-                     println!("已生成: {}", safe_name);
-                 }
+                // Update file time
+                if created_at_str != "Unknown" {
+                    if let Ok(dt) =
+                        chrono::DateTime::parse_from_rfc3339(&created_at_str.replace("Z", "+00:00"))
+                    {
+                        let timestamp = dt.timestamp();
+                        if timestamp > 0 {
+                            let filetime = filetime::FileTime::from_unix_time(timestamp, 0);
+                            let _ = filetime::set_file_times(&file_path, filetime, filetime);
+                            println!("已生成: {} (时间已重置为 {})", safe_name, created_at_str);
+                        } else {
+                            println!("已生成: {} (时间无效)", safe_name);
+                        }
+                    } else {
+                        println!("已生成: {} (时间解析失败)", safe_name);
+                    }
+                } else {
+                    println!("已生成: {}", safe_name);
+                }
             }
         } else {
-             println!("创建文件失败: {:?}", file_path);
+            println!("创建文件失败: {:?}", file_path);
         }
     });
 

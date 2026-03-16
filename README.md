@@ -1,6 +1,6 @@
 # Cherry Studio Backup JSON Converter
 
-这是一个用 Rust 编写的高效工具，用于将 Cherry Studio 的备份文件（JSON 格式）转换为易于阅读的 Markdown 文档。
+这是一个用 Rust 编写的高效工具，用于将 Cherry Studio 的备份文件（JSON 或包含 `data.json` 的 ZIP）转换为易于阅读的 Markdown 文档。
 
 它不仅能提取对话内容，还能保留完整的元数据（如模型名称、助手信息、创建时间等），并自动将生成文件的创建/修改时间重置为对话发生的实际时间。
 
@@ -29,7 +29,7 @@ cargo build --release
 
 #### 基本用法
 
-直接指定备份文件路径。默认会在备份文件同级目录下创建 `cherry-studio-export` 文件夹存放结果。
+直接指定备份文件路径。支持直接传入 `JSON`，也支持传入 Cherry 导出的 `ZIP`（程序会先解压并读取其中的 `data.json`）。默认会在备份文件同级目录下创建 `cherry-studio-export` 文件夹存放结果。
 
 ```bash
 # 开发环境运行
@@ -37,6 +37,9 @@ cargo run -- path/to/backup.json
 
 # 使用编译后的程序
 ./cherry-studio-backup-json-converter path/to/backup.json
+
+# 也支持 Cherry 导出的 ZIP 备份
+./cherry-studio-backup-json-converter path/to/cherry-backup.zip
 ```
 
 #### 指定输出目录
