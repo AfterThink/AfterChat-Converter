@@ -7,3 +7,6 @@
 [submodule "converter/qwen"]
 	path = converter/qwen
 	url = https://github.com/AfterThink/qwen-json-converter
+[submodule "converter/claude"]
+	path = converter/claude
+	url = https://github.com/AfterThink/claude-json-converter
