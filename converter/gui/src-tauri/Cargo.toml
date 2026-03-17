@@ -1,6 +1,6 @@
 [package]
 name = "afterchat-converter"
-version = "0.1.0"
+version = "0.1.1"
 description = "Tauri GUI for local conversation converters"
 edition = "2021"
 

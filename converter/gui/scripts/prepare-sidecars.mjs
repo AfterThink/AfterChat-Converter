@@ -16,6 +16,7 @@ const binaries = [
   { pkg: "google-ai-studio-json-converter", bin: "ai-studio" },
   { pkg: "cherry-studio-backup-json-converter", bin: "cherry" },
   { pkg: "qwen-json-converter", bin: "qwen" },
+  { pkg: "claude-json-converter", bin: "claude" },
 ];
 
 mkdirSync(tauriBinDir, { recursive: true });

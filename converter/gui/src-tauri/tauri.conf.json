@@ -9,7 +9,7 @@
   },
   "package": {
     "productName": "afterchat-converter",
-    "version": "0.1.0"
+    "version": "0.1.1"
   },
   "tauri": {
     "allowlist": {
@@ -36,7 +36,8 @@
       "externalBin": [
         "bin/ai-studio",
         "bin/cherry",
-        "bin/qwen"
+        "bin/qwen",
+        "bin/claude"
       ],
       "identifier": "com.openai.converters"
     },

@@ -47,12 +47,14 @@ enum ConverterKind {
     AiStudio,
     Cherry,
     Qwen,
+    Claude,
 }
 
-const ALL_CONVERTERS: [ConverterKind; 3] = [
+const ALL_CONVERTERS: [ConverterKind; 4] = [
     ConverterKind::AiStudio,
     ConverterKind::Cherry,
     ConverterKind::Qwen,
+    ConverterKind::Claude,
 ];
 
 #[derive(Debug, Deserialize)]
@@ -174,6 +176,7 @@ async fn try_sidecar(converter: ConverterKind, args: &[String]) -> Result<Sideca
         ConverterKind::AiStudio => "ai-studio",
         ConverterKind::Cherry => "cherry",
         ConverterKind::Qwen => "qwen",
+        ConverterKind::Claude => "claude",
     };
 
     let (mut receiver, _child) = Command::new_sidecar(sidecar_name)
@@ -221,6 +224,11 @@ fn predict_output_path(
             .map(Path::to_path_buf)
             .unwrap_or_else(|| PathBuf::from("."))
             .join("cherry-studio-export"),
+        Some(ConverterKind::Claude) => input_path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("claude_markdowns"),
         _ => {
             if input_path.is_dir() {
                 input_path.to_path_buf()

@@ -233,7 +233,7 @@ async function pickInputFile() {
     multiple: false,
     directory: false,
     title: getT().chooseInput,
-    filters: [{ name: "JSON", extensions: ["json"] }],
+    filters: [{ name: "Export Files", extensions: ["json", "zip"] }],
   });
 
   const selectedPath = Array.isArray(picked) ? picked[0] : picked;
@@ -397,7 +397,7 @@ function buildSuggestedPath(input) {
 }
 
 function converterOutputsDirectory(converter) {
-  return converter === null || converter === "cherry";
+  return converter === null || converter === "cherry" || converter === "claude";
 }
 
 function selectConverter(input) {
@@ -405,6 +405,7 @@ function selectConverter(input) {
   if (name.endsWith(".zip") && name.includes("cherry")) return "cherry";
   if (name.includes("cherry")) return "cherry";
   if (name.includes("qwen")) return "qwen";
+  if (name.includes("batch") || name.includes("claude")) return "claude";
   if (name.includes("ai-studio") || name.includes("aistudio") || name.includes("gemini")) return "ai-studio";
   return null;
 }

@@ -1,10 +1,11 @@
 # Converters GUI
 
-一个基于 Tauri + Bun + Vite 的桌面 GUI，用来拖拽调用仓库里的三个转换器：
+一个基于 Tauri + Bun 的桌面 GUI，用来拖拽调用仓库里的四个转换器：
 
 - `google-ai-studio-json-converter`
 - `cherry-studio-backup-json-converter`
 - `qwen-json-converter`
+- `claude-json-converter`
 
 ## 功能
 
@@ -12,6 +13,7 @@
 - 根据文件名自动路由转换器
   - 名称包含 `cherry` → `cherry-studio-backup-json-converter`
   - 名称包含 `qwen` → `qwen-json-converter`
+  - 名称包含 `claude` → `claude-json-converter`
   - 其他情况 → `google-ai-studio-json-converter`
 - 默认输出到原位置旁边
 - 取消勾选后，立即弹原生保存路径对话框
