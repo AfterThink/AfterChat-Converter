@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
+use afterchat_rikka::{ConvertOptions, run_conversion};
 use anyhow::Result;
 use clap::Parser;
-use afterchat_rikka::{ConvertOptions, run_conversion};
 
 #[derive(Debug, Parser)]
 #[command(

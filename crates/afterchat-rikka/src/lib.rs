@@ -81,8 +81,11 @@ pub fn run_conversion(options: ConvertOptions) -> Result<RunSummary> {
         }
     }
 
-    let target =
-        resolve_zip_target(input, options.output.as_deref(), default_zip_name(PLATFORM_ID))?;
+    let target = resolve_zip_target(
+        input,
+        options.output.as_deref(),
+        default_zip_name(PLATFORM_ID),
+    )?;
     if let Some(parent) = target.parent()
         && !parent.as_os_str().is_empty()
     {

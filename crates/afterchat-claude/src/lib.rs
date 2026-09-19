@@ -139,7 +139,11 @@ impl RawMessage {
             .attachments
             .iter()
             .filter_map(|item| item.file_name.as_deref())
-            .chain(self.files.iter().filter_map(|item| item.file_name.as_deref()))
+            .chain(
+                self.files
+                    .iter()
+                    .filter_map(|item| item.file_name.as_deref()),
+            )
         {
             let name = name.trim();
             if !name.is_empty() && seen.insert(name.to_string()) {
@@ -235,10 +239,7 @@ fn load_zip(path: &Path) -> Result<Vec<RawConversation>> {
         entry
             .read_to_string(&mut text)
             .with_context(|| format!("failed to read {ZIP_ARCHIVE_NAME} in {}", path.display()))?;
-        return parse_conversations(
-            &text,
-            &format!("{ZIP_ARCHIVE_NAME} in {}", path.display()),
-        );
+        return parse_conversations(&text, &format!("{ZIP_ARCHIVE_NAME} in {}", path.display()));
     }
 
     bail!("{ZIP_ARCHIVE_NAME} not found in {}", path.display())
@@ -308,7 +309,12 @@ fn to_message(raw: &RawMessage) -> Option<Message> {
             if part.kind.as_deref() != Some("text") {
                 continue;
             }
-            let Some(text) = part.text.as_deref().map(str::trim).filter(|t| !t.is_empty()) else {
+            let Some(text) = part
+                .text
+                .as_deref()
+                .map(str::trim)
+                .filter(|t| !t.is_empty())
+            else {
                 continue;
             };
             body.push(text.to_string());
@@ -327,7 +333,9 @@ fn to_message(raw: &RawMessage) -> Option<Message> {
     }
 
     let role = match raw.sender.as_deref().map(str::trim) {
-        Some(sender) if sender.eq_ignore_ascii_case("human") || sender.eq_ignore_ascii_case("user") => {
+        Some(sender)
+            if sender.eq_ignore_ascii_case("human") || sender.eq_ignore_ascii_case("user") =>
+        {
             Role::User
         }
         // assistant 与一切无法识别的角色都兜底成 Assistant（契约 §4.2）
@@ -393,7 +401,10 @@ mod tests {
         let conversation = to_conversation(&raws[0]);
         assert_eq!(conversation.model, "Unknown");
         assert_eq!(conversation.time_secs, Some(1_725_891_751));
-        assert_eq!(conversation.url.as_deref(), Some("https://claude.ai/chat/u1"));
+        assert_eq!(
+            conversation.url.as_deref(),
+            Some("https://claude.ai/chat/u1")
+        );
         assert_eq!(conversation.messages.len(), 3);
         assert_eq!(conversation.messages[0].role, Role::User);
         assert_eq!(conversation.messages[1].role, Role::Assistant);
@@ -402,7 +413,10 @@ mod tests {
         let markdown = conversation.render();
         assert!(markdown.starts_with("## Metadata\n"), "{markdown}");
         assert!(markdown.contains("- **Model:** `Unknown`\n"), "{markdown}");
-        assert!(markdown.contains("- **Conversation ID:** `u1`\n"), "{markdown}");
+        assert!(
+            markdown.contains("- **Conversation ID:** `u1`\n"),
+            "{markdown}"
+        );
         assert!(markdown.contains("### 🧑‍💻 User\n\n**你好**\n"), "{markdown}");
         assert!(!markdown.contains("tool_use"), "{markdown}");
     }

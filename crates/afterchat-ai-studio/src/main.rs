@@ -15,7 +15,8 @@ use std::time::UNIX_EPOCH;
 
 use anyhow::{Context, Result, bail};
 use chatformat::{
-    Conversation, MetadataLine, Message, Role, SINGLE_NAME_MAX, UNKNOWN_MODEL, sanitize_filename_with,
+    Conversation, Message, MetadataLine, Role, SINGLE_NAME_MAX, UNKNOWN_MODEL,
+    sanitize_filename_with,
 };
 use clap::Parser;
 use filetime::{FileTime, set_file_times};
@@ -85,7 +86,9 @@ struct Root {
 
 impl Root {
     fn looks_like_export(&self) -> bool {
-        self.run_settings.is_some() || self.system_instruction.is_some() || self.chunked_prompt.is_some()
+        self.run_settings.is_some()
+            || self.system_instruction.is_some()
+            || self.chunked_prompt.is_some()
     }
 }
 
@@ -203,7 +206,8 @@ fn normalize_role(role: &str) -> Role {
 // ═══════════════════════════════════════════════════════════
 
 fn load_json(path: &Path) -> Result<Root> {
-    let raw = fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let raw =
+        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
     // ChatFormat 允许 UTF-8 BOM，serde_json 不接受，先剥掉。
     let root: Root = serde_json::from_str(raw.trim_start_matches('\u{feff}'))
         .with_context(|| format!("failed to parse JSON in {}", path.display()))?;
@@ -236,7 +240,10 @@ fn copy_times(target: &Path, source: &Path) {
 }
 
 fn ensure_parent(path: &Path) -> Result<()> {
-    if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create {}", parent.display()))?;
     }
@@ -278,19 +285,27 @@ fn output_for_single(input: &Path, output: Option<&Path>) -> Result<PathBuf> {
         Some(dir) => {
             fs::create_dir_all(dir)
                 .with_context(|| format!("failed to create output dir {}", dir.display()))?;
-            let name = sanitize_filename_with(&default_stem(input), SINGLE_NAME_MAX, "Untitled_Conversation");
+            let name = sanitize_filename_with(
+                &default_stem(input),
+                SINGLE_NAME_MAX,
+                "Untitled_Conversation",
+            );
             Ok(dir.join(format!("{name}.md")))
         }
         None => Ok(input.with_extension("md")),
     }
 }
 
-fn output_for_tree_member(input_root: &Path, file: &Path, output: Option<&Path>) -> Result<PathBuf> {
+fn output_for_tree_member(
+    input_root: &Path,
+    file: &Path,
+    output: Option<&Path>,
+) -> Result<PathBuf> {
     match output {
         Some(base) => {
-            let relative = file
-                .strip_prefix(input_root)
-                .with_context(|| format!("{} is not under {}", file.display(), input_root.display()))?;
+            let relative = file.strip_prefix(input_root).with_context(|| {
+                format!("{} is not under {}", file.display(), input_root.display())
+            })?;
             let mut target = base.join(relative);
             target.set_extension("md");
             Ok(target)
@@ -316,7 +331,10 @@ fn run(input: &Path, output: Option<&Path>) -> Result<usize> {
     }
 
     if !input.is_dir() {
-        bail!("input must be a JSON file or a directory: {}", input.display());
+        bail!(
+            "input must be a JSON file or a directory: {}",
+            input.display()
+        );
     }
 
     let mut files: Vec<PathBuf> = WalkDir::new(input)
@@ -358,7 +376,11 @@ fn run(input: &Path, output: Option<&Path>) -> Result<usize> {
         }
     }
 
-    info!("converted {written}/{} files under {}", files.len(), input.display());
+    info!(
+        "converted {written}/{} files under {}",
+        files.len(),
+        input.display()
+    );
     Ok(written)
 }
 
@@ -400,23 +422,51 @@ mod tests {
 
         assert!(markdown.starts_with("## Metadata\n"), "{markdown}");
         assert!(!markdown.contains("Conversation Transcript"), "{markdown}");
-        assert!(markdown.contains("- **Model:** `gemini-2.5-pro`\n"), "{markdown}");
+        assert!(
+            markdown.contains("- **Model:** `gemini-2.5-pro`\n"),
+            "{markdown}"
+        );
         assert!(markdown.contains("- **Time:** 2024-"), "{markdown}");
         assert!(markdown.contains("- **Temperature:** `1`\n"), "{markdown}");
         assert!(markdown.contains("- **Top P:** `0.95`\n"), "{markdown}");
-        assert!(markdown.contains("### ⚙️ System\n\n**你是助手**\n"), "{markdown}");
+        assert!(
+            markdown.contains("### ⚙️ System\n\n**你是助手**\n"),
+            "{markdown}"
+        );
         assert!(markdown.contains("### 🧑‍💻 User\n\n**问题**\n"), "{markdown}");
-        assert!(markdown.contains("#### 🤔 Thought Process\n\n想想\n"), "{markdown}");
-        assert!(markdown.contains("#### 💡 Response\n\n答案\n"), "{markdown}");
+        assert!(
+            markdown.contains("#### 🤔 Thought Process\n\n想想\n"),
+            "{markdown}"
+        );
+        assert!(
+            markdown.contains("#### 💡 Response\n\n答案\n"),
+            "{markdown}"
+        );
     }
 
     #[test]
     fn merges_consecutive_blocks_and_skips_empty() {
         let chunks = vec![
-            Chunk { text: None, role: "user".into(), is_thought: false },
-            Chunk { text: Some("a".into()), role: "model".into(), is_thought: true },
-            Chunk { text: Some("b".into()), role: "model".into(), is_thought: true },
-            Chunk { text: Some("c".into()), role: "model".into(), is_thought: false },
+            Chunk {
+                text: None,
+                role: "user".into(),
+                is_thought: false,
+            },
+            Chunk {
+                text: Some("a".into()),
+                role: "model".into(),
+                is_thought: true,
+            },
+            Chunk {
+                text: Some("b".into()),
+                role: "model".into(),
+                is_thought: true,
+            },
+            Chunk {
+                text: Some("c".into()),
+                role: "model".into(),
+                is_thought: false,
+            },
         ];
         let messages = build_messages(&chunks);
         assert_eq!(messages.len(), 1, "{messages:?}");

@@ -118,8 +118,14 @@ mod tests {
 
     #[test]
     fn spec_falls_back_when_empty() {
-        assert_eq!(sanitize_filename_with("///", 60, "Untitled_Conversation"), "Untitled_Conversation");
-        assert_eq!(sanitize_filename_with("  x  ", 60, "Untitled_Conversation"), "x");
+        assert_eq!(
+            sanitize_filename_with("///", 60, "Untitled_Conversation"),
+            "Untitled_Conversation"
+        );
+        assert_eq!(
+            sanitize_filename_with("  x  ", 60, "Untitled_Conversation"),
+            "x"
+        );
         assert_eq!(sanitize_filename_with("abcdef", 3, "f"), "abc");
     }
 

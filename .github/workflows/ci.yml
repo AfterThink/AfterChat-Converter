@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # 国内本地开发用 gui/.npmrc 里的镜像源；CI 上统一走官方源
+  BUN_CONFIG_REGISTRY: https://registry.npmjs.org/
+
+jobs:
+  test:
+    name: Test (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check GUI version consistency
+        shell: pwsh
+        run: |
+          $pkg   = (Get-Content gui/package.json -Raw | ConvertFrom-Json).version
+          $tauri = (Get-Content gui/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).package.version
+          $crate = (Get-Content gui/src-tauri/Cargo.toml |
+                    Select-String -Pattern '^version\s*=\s*"([^"]+)"' |
+                    Select-Object -First 1).Matches.Groups[1].Value
+          Write-Host "package.json=$pkg  tauri.conf.json=$tauri  Cargo.toml=$crate"
+          if ($pkg -ne $tauri -or $pkg -ne $crate) {
+            throw "GUI version mismatch: package.json=$pkg, tauri.conf.json=$tauri, Cargo.toml=$crate"
+          }
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Check GUI lockfile
+        working-directory: gui
+        run: bun install --frozen-lockfile
+
+      - name: Test
+        run: cargo test --workspace --exclude afterchat-converter

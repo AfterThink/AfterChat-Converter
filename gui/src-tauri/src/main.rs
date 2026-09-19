@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 
 use serde::{Deserialize, Serialize};
-use tauri::Manager;
 use tauri::api::process::{Command, CommandEvent};
+use tauri::Manager;
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]

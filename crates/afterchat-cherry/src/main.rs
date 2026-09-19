@@ -268,7 +268,9 @@ fn render_topic(ctx: &RenderContext<'_>, topic: &Topic) -> TopicOutcome {
         .or_else(|| topic.created_at.as_ref().and_then(parse_created_at_secs));
 
     let assistant_info = ctx.assistants.get(assistant_id);
-    let assistant_name = assistant_info.map(|a| a.name.as_str()).unwrap_or("Assistant");
+    let assistant_name = assistant_info
+        .map(|a| a.name.as_str())
+        .unwrap_or("Assistant");
     let system_instruction = assistant_info.map(|a| a.prompt.as_str()).unwrap_or("");
 
     let mut topic_messages = topic.messages.iter().collect::<Vec<_>>();
@@ -521,7 +523,11 @@ fn main() -> Result<()> {
         show_progress: false,
     })?;
 
-    println!("已打包 {} 个对话 → {}", conversations.len(), target.display());
+    println!(
+        "已打包 {} 个对话 → {}",
+        conversations.len(),
+        target.display()
+    );
     if !failures.is_empty() {
         println!(
             "跳过 {} 个空主题（详见压缩包内 export-failures.md）",
@@ -547,6 +553,9 @@ mod tests {
         assert_eq!(millis, Some(1761203267));
 
         assert_eq!(parse_created_at_secs(&serde_json::json!(null)), None);
-        assert_eq!(parse_created_at_secs(&serde_json::json!("not a date")), None);
+        assert_eq!(
+            parse_created_at_secs(&serde_json::json!("not a date")),
+            None
+        );
     }
 }

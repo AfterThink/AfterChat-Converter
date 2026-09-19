@@ -12,10 +12,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use chatformat::{
-    Conversation, ExportFailure, NameStyle, Role, SINGLE_NAME_MAX, ZipExport, default_zip_name, time,
-};
 use chatformat::Message as ChatMessage;
+use chatformat::{
+    Conversation, ExportFailure, NameStyle, Role, SINGLE_NAME_MAX, ZipExport, default_zip_name,
+    time,
+};
 use log::{debug, warn};
 use serde::Deserialize;
 use serde_json::Value;
@@ -113,8 +114,7 @@ fn convert_one(
             Ok(target)
         }
         ParsedInput::All { sessions, failures } => {
-            let conversations: Vec<Conversation> =
-                sessions.iter().map(to_conversation).collect();
+            let conversations: Vec<Conversation> = sessions.iter().map(to_conversation).collect();
             let failures: Vec<ExportFailure> = failures
                 .into_iter()
                 .map(|failure| ExportFailure {
@@ -123,12 +123,8 @@ fn convert_one(
                     reason: failure.reason,
                 })
                 .collect();
-            let target = resolve_target(
-                input,
-                output,
-                output_is_file,
-                default_zip_name(PLATFORM_ID),
-            )?;
+            let target =
+                resolve_target(input, output, output_is_file, default_zip_name(PLATFORM_ID))?;
             ensure_parent_dir(&target)?;
             chatformat::write_zip(&ZipExport {
                 platform: PLATFORM_ID,
@@ -642,7 +638,10 @@ mod tests {
         assert!(md.starts_with("## Metadata\n"), "{md}");
         assert!(md.contains("- **Model:** `qwen3.5-plus`"), "{md}");
         assert!(md.contains("- **Time:** "), "{md}");
-        assert!(md.contains("- **URL:** https://chat.qwen.ai/c/conv-1"), "{md}");
+        assert!(
+            md.contains("- **URL:** https://chat.qwen.ai/c/conv-1"),
+            "{md}"
+        );
         assert!(!md.contains("### Run Settings"), "{md}");
         assert!(!md.contains("models/Qwen"), "{md}");
     }

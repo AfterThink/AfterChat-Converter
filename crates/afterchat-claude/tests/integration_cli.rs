@@ -11,8 +11,8 @@ fn build_fixture(dir: &TempDir) -> std::path::PathBuf {
     let zip_path = dir.path().join("data-test-batch-0000.zip");
     let file = fs::File::create(&zip_path).expect("create fixture zip");
     let mut zip = zip::ZipWriter::new(file);
-    let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
 
     let conversations = r##"[
         {
@@ -93,6 +93,12 @@ fn converts_claude_zip_into_contract_zip() {
         markdown.contains("- **URL:** https://claude.ai/chat/u-1\n"),
         "{markdown}"
     );
-    assert!(markdown.contains("### 🧑‍💻 User\n\n**Question**\n"), "{markdown}");
-    assert!(markdown.contains("### 🤖 Assistant\n\nAnswer\n"), "{markdown}");
+    assert!(
+        markdown.contains("### 🧑‍💻 User\n\n**Question**\n"),
+        "{markdown}"
+    );
+    assert!(
+        markdown.contains("### 🤖 Assistant\n\nAnswer\n"),
+        "{markdown}"
+    );
 }

@@ -28,15 +28,22 @@ pub fn rfc3339_to_secs(text: &str) -> Option<i64> {
 /// 数字字符串或 RFC3339 都能解析的宽松版本。
 pub fn value_to_secs_any(value: Option<&Value>) -> Option<i64> {
     match value? {
-        Value::String(text) => {
-            rfc3339_to_secs(text).or_else(|| text.trim().parse::<f64>().ok().map(|f| normalize_secs(f as i64)))
-        }
+        Value::String(text) => rfc3339_to_secs(text).or_else(|| {
+            text.trim()
+                .parse::<f64>()
+                .ok()
+                .map(|f| normalize_secs(f as i64))
+        }),
         other => value_to_secs(Some(other)),
     }
 }
 
 fn normalize_secs(raw: i64) -> i64 {
-    if raw >= MILLIS_THRESHOLD { raw / 1000 } else { raw }
+    if raw >= MILLIS_THRESHOLD {
+        raw / 1000
+    } else {
+        raw
+    }
 }
 
 /// `2026-09-17 21:19:12 +08:00`
@@ -78,15 +85,27 @@ mod tests {
 
     #[test]
     fn normalizes_millis() {
-        assert_eq!(value_to_secs(Some(&json!(1_700_000_000))), Some(1_700_000_000));
-        assert_eq!(value_to_secs(Some(&json!(1_700_000_000_000i64))), Some(1_700_000_000));
-        assert_eq!(value_to_secs(Some(&json!("1700000000"))), Some(1_700_000_000));
+        assert_eq!(
+            value_to_secs(Some(&json!(1_700_000_000))),
+            Some(1_700_000_000)
+        );
+        assert_eq!(
+            value_to_secs(Some(&json!(1_700_000_000_000i64))),
+            Some(1_700_000_000)
+        );
+        assert_eq!(
+            value_to_secs(Some(&json!("1700000000"))),
+            Some(1_700_000_000)
+        );
         assert_eq!(value_to_secs(Some(&json!(null))), None);
     }
 
     #[test]
     fn parses_rfc3339() {
-        assert_eq!(rfc3339_to_secs("2024-09-09T14:22:31.424169Z"), Some(1_725_891_751));
+        assert_eq!(
+            rfc3339_to_secs("2024-09-09T14:22:31.424169Z"),
+            Some(1_725_891_751)
+        );
         assert_eq!(rfc3339_to_secs("not a date"), None);
     }
 

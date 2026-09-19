@@ -186,11 +186,7 @@ mod tests {
             let out = strip_hashes(input);
             assert!(out.starts_with("**") && out.ends_with("**"), "{out}");
             let inner = &out[2..out.len() - 2];
-            let without_code: String = inner
-                .split('`')
-                .step_by(2)
-                .collect::<Vec<_>>()
-                .join("");
+            let without_code: String = inner.split('`').step_by(2).collect::<Vec<_>>().join("");
             assert!(!without_code.contains("**"), "{out}");
         }
     }

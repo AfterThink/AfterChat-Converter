@@ -149,7 +149,8 @@ impl Default for Conversation {
 impl Conversation {
     /// 排序时间：优先 `sort_ms`，否则 `time_secs * 1000`。
     pub fn sort_ms(&self) -> Option<i64> {
-        self.sort_ms.or_else(|| self.time_secs.map(|secs| secs * 1000))
+        self.sort_ms
+            .or_else(|| self.time_secs.map(|secs| secs * 1000))
     }
 
     pub fn render(&self) -> String {
@@ -257,8 +258,7 @@ fn non_empty(value: Option<&str>) -> Option<&str> {
 /// 统一的进度条样式。
 pub(crate) fn make_progress_bar(total: u64, unit: &str) -> ProgressBar {
     let pb = ProgressBar::new(total);
-    let template =
-        "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg} ({per_sec}, ETA {eta})";
+    let template = "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg} ({per_sec}, ETA {eta})";
     let style = ProgressStyle::with_template(template)
         .unwrap_or_else(|_| ProgressStyle::default_bar())
         .progress_chars("=> ");
@@ -295,12 +295,18 @@ mod tests {
         assert!(text.starts_with("## Metadata\n"), "{text}");
         assert!(text.contains("- **Model:** `gemini-2.5-pro`\n"), "{text}");
         assert!(text.contains("- **Time:** 2024-"), "{text}");
-        assert!(text.contains("- **URL:** https://example.com/c/1\n"), "{text}");
+        assert!(
+            text.contains("- **URL:** https://example.com/c/1\n"),
+            "{text}"
+        );
         assert!(text.contains("- **Assistant:** `A`\n"), "{text}");
         assert!(text.contains("\n## Conversation\n"), "{text}");
         assert!(text.contains("### ⚙️ System\n\n**你是助手**\n"), "{text}");
         assert!(text.contains("### 🧑‍💻 User\n\n你好\n**标题**\n"), "{text}");
-        assert!(text.contains("#### 🤔 Thought Process\n\n**想**\n"), "{text}");
+        assert!(
+            text.contains("#### 🤔 Thought Process\n\n**想**\n"),
+            "{text}"
+        );
         assert!(text.contains("#### 💡 Response\n\n**答复**\n"), "{text}");
         assert!(text.ends_with('\n') && !text.ends_with("\n\n"), "{text}");
     }

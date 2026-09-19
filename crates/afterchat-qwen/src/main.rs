@@ -2,10 +2,10 @@ use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use afterchat_qwen::{ConvertOptions, run_conversion};
 use clap::Parser;
 use env_logger::Env;
 use log::{error, info};
-use afterchat_qwen::{ConvertOptions, run_conversion};
 
 #[derive(Debug, Parser)]
 #[command(

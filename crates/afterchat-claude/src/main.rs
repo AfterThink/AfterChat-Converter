@@ -2,10 +2,10 @@ use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use afterchat_claude::{ConvertOptions, run_conversion};
 use clap::Parser;
 use env_logger::Env;
 use log::{error, info, warn};
-use afterchat_claude::{ConvertOptions, run_conversion};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -56,7 +56,10 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
     }
 
     if summary.failed > 0 {
-        warn!("{0} conversation(s) were skipped; see export-failures.md", summary.failed);
+        warn!(
+            "{0} conversation(s) were skipped; see export-failures.md",
+            summary.failed
+        );
     }
 
     Ok(ExitCode::SUCCESS)
