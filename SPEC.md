@@ -1,141 +1,203 @@
 # 规格说明（SPEC）
 
-## 1. 目标范围
-本工具用于将 Qwen 风格的 JSON 会话导出转换为 Markdown 对话文件。  
-输出格式为程序内置固定结构，不依赖外部模板文件。
+> 目标契约见 [`CHATFORMAT.md`](./CHATFORMAT.md)。本文描述 `qwen` 工具的具体实现规格。
+
+## 1. 范围
+
+把 Qwen 网页版导出的 JSON 会话转换为 AfterChat 对话 Markdown（单体）或 ZIP（全部）。
+输出格式为程序内置，不依赖外部模板。
 
 ## 2. CLI 设计
 
-## 命令
-- `qwen-json-converter convert -i <input> [-o <output>] [--progress true|false]`
-- Windows 拖拽模式：`qwen-json-converter <path1> [path2 ...]`
+```
+qwen <JSON>... [-o <PATH>] [--progress <BOOL>]
+```
 
-## 参数
-- `-i, --input <path>`：输入 JSON 文件或目录
-- `-o, --output <path>`：
-  - 目录路径：用于目录模式或批量拆分输出
-  - `.md` 文件路径：仅在单会话输出时允许
-- `--progress <bool>`：是否显示 `indicatif` 进度条
+无子命令 —— 可直接把文件拖到可执行文件上。
 
-## 参数校验
-- 缺少输入路径：报错退出
-- 多输入时 `-o` 指向单个 `.md` 文件：报错退出
+| 参数 | 必填 | 说明 |
+| --- | --- | --- |
+| `<JSON>...` | 是 | 一个或多个输入 JSON 文件路径 |
+| `-o, --output <PATH>` | 否 | 输出文件（`.md`/`.zip`）或目录；省略则写到各源文件同目录 |
+| `--progress <BOOL>` | 否 | 强制开关进度条；默认 `stdout().is_terminal()` |
+
+### 参数校验
+
+- 无输入 → 报错退出
+- 多输入且 `-o` 指向单个文件（扩展名为 `.md`/`.zip`）→ 报错退出
+- 输入不存在 / 不是文件 → 该项失败
 
 ## 3. 输入识别模型
 
-## 单会话
-- 顶层为对象且不含 `data` 数组，或顶层数组长度为 1 的会话对象数组
+顶层 JSON 值决定形态：
 
-## 大 JSON（包装结构）
-- 顶层对象包含：
-  - `success: bool`
-  - `request_id: string`
-  - `data: [session, session, ...]`
+| 顶层结构 | 形态 | 输出 |
+| --- | --- | --- |
+| 数组 | 单体导出 | 长度 1 且无坏项 → `.md`；否则 → `.zip` |
+| 对象，`data` 是数组 | 全部导出 | **始终** `.zip` |
+| 对象，`data` 是对象且含 `chat` | 兼容单体 | `.md` |
+| 对象，顶层含 `chat` | 兼容单体 | `.md` |
+| 其它 / 缺 `chat` | 拒绝 | 报错退出 |
 
-## 目录模式
-- 递归扫描目录下所有 `*.json`
+> 形态由**结构**决定，不由数量决定：`data` 数组即使只有 1 个会话也打包成 `.zip`，
+> 这样「全部导出」语义稳定。
+
+### 会话结构（用到的字段）
+
+```jsonc
+{
+  "id": "...",            // URL 与文件名回退
+  "title": "...",         // 文件名
+  "created_at": 1700000000,   // Metadata Time（支持秒 / 毫秒 / 数字字符串）
+  "updated_at": 1700000000,   // zip 排序（优先 updated_at）
+  "chat": {
+    "messages": [             // 正文来源
+      { "role": "user", "content": "..." },
+      {
+        "role": "assistant",
+        "content": "",
+        "reasoning_content": null,      // 可选，并入思考段
+        "modelName": "Qwen3.5-Plus",    // 优先
+        "models": ["qwen3.5-plus"],     // 回退 models[0]
+        "content_list": [
+          { "phase": "think",            "content": "..." },
+          { "phase": "thinking_summary", "content": "", "extra": {
+              "summary_title":   { "content": ["标题"] },
+              "summary_thought": { "content": ["要点 1", "要点 2"] }
+          }},
+          { "phase": "answer",           "content": "..." },
+          { "phase": "web_search",       "content": "..." }   // 忽略
+        ]
+      }
+    ]
+  }
+}
+```
 
 ## 4. 输出 Markdown 约定
 
-## 结构分区
-- `## Metadata`
-- `### Run Settings`
-- `## Conversation`
+### 结构
 
-## 文件命名规则
-- 单会话输出：
-  - 优先：清洗后的 `title`
-  - 回退：清洗后的 `id`
-  - 最终回退：输入源文件名（不含扩展名）
-- 大 JSON 拆分输出：
-  - 使用 `{sanitized_title_or_id}.md`
-  - 重名自动追加后缀：`-2`、`-3`、...
-  - 不使用前置序号
+```
+## Metadata
+<空行>
+- **Model:** `<model>`
+- **Time:** <YYYY-MM-DD HH:mm:ss ±HH:MM>
+- **URL:** https://chat.qwen.ai/c/<id>
+<空行>
+## Conversation
+<空行>
+### 🧑‍💻 User
+<空行>
+<正文>
+<空行>
+### 🤖 Assistant
+<空行>
+[#### 🤔 Thought Process
+<空行>
+<思考正文>
+<空行>
+#### 💡 Response
+<空行>]
+<回复正文>
+<空行>
+```
 
-## Metadata 字段（当前实现）
-- `Model`（写为 `models/<modelname>`）
-- `Tags`（归一化后）
-- `Conversation ID`
-- `User ID`
-- `Request ID`（包装结构时可写）
-- `Chat Type`
-- `Sub Chat Type`
-- `Source`
-- `Generated At (UTC)`
+- **Metadata 只有 `Model` / `Time` / `URL` 三键**（对齐 JS 当前实现，并符合 ChatFormat 对 Metadata 的「推荐键」）
+- 整篇以 `lines.join("\n")` 拼接，与 JS 的 `lines.join('\n')` 一致
+- 没有任何思考时，`#### 💡 Response` 头**不输出**（直接是正文）
 
-## 消息区格式
-- 用户消息头：`### 🧑‍💻 User`
-- 助手消息头：`### 🤖 Assistant`
-- 若存在思考段：
-  - `#### 🤔 Thought Process`
-  - `#### 💡 Response`
+### 角色头
 
-## 分支展开（重答）
-- 同一个用户消息有多个助手子节点时：
-  - 重复该用户消息
-  - 每个分支分别配对应助手回答
+- 用户：`### 🧑‍💻 User`
+- 助手：`### 🤖 Assistant`
+- 思考：`#### 🤔 Thought Process`
+- 回复：`#### 💡 Response`
+
+### 消息体规则
+
+- 空正文的 user 消息跳过；思考与回复都为空的 assistant 消息跳过
+- 同一段内多个片段（多条 `answer`、多个思考块）以 `\n\n` 连接
+- 重复文本按 `trim()` 后去重
+- `strip_hashes`：`^#{1,6}\s+(.+)$` → `**$1**`（逐行）
+  - **跳过代码围栏内部**（```` ``` ```` / `~~~` 起止），只处理围栏外
+  - `strip_hashes` 应用于思考段与回复段整体（含 `thinking_summary` 生成的 `**标题**`，其本身不会被二次改写）
 
 ## 5. 字段语义与提取
 
-## tags 归一化
-- 来源：优先 `session.meta.tags`
-- 支持：数组或字符串
-- 规则：
-  - 去首尾空白、外层引号/反引号、前导 `#`
-  - 分隔优先级：逗号 `,` > 分号 `;` > 空白
-  - 大小写不敏感去重，保留首次写法
-  - 若检测到“乱码字符集合”标签（如大量单字符符号数组），判定为无效并忽略
-  - 忽略后回退到默认标签策略（`chat/...`、`sub/...` 或 `untagged`）
+### model
 
-## model 规则
-- 来源优先级：assistant `modelName` > assistant `model` > `unknown`
-- 输出统一加命名空间：`models/<modelname>`
+按 `chat.messages` 顺序遍历，每条消息：
 
-## thinking 规则
-- 可能来源：
-  - `reasoning_content`
-  - `content_list` 中 phase 包含 `thinking` 的项
-  - `content_list[].extra` 内的 summary/thought 结构
-- 统一渲染到 `#### 🤔 Thought Process`
+1. `modelName` 非空 → 采用
+2. 否则 `models[0]` 为字符串 → 采用
 
-## 时间戳与文件时间
-- 来源：消息或会话级时间字段
-- 毫秒时间戳会归一化为秒
-- 写回输出 Markdown 文件时间（mtime）
+**首个命中即返回**，不做大小写归一（保持原样，例如 `qwen3.5-plus`）。
+全部落空 → `unknown`。
 
-## 6. 并发与性能策略
-- 使用 `rayon` 并行处理
-- 线程数来源：`std::thread::available_parallelism()`
-- 目录/多文件：并行处理各 JSON
-- 大 JSON 拆分：按 `1000` 会话分批，批内并行写入
+### thinking / response 分派
 
-## 7. 错误处理与退出码
+见上表。要点：
 
-## 行为
-- 单文件解析/写入失败会记录，不中断整体批处理
-- 最终错误写入 `error.log`
-- 对于脏 `meta.tags`（字符袋）不视为致命错误，仅记录 warning 并继续转换
+- `thinking_summary` 的 `.content` 为空串，真实内容在 `extra.*.content[]`
+- `reasoning_content` 可为字符串、数组或对象，递归收集其中所有字符串
+- 工具 phase（`web_search`、`image_gen_tool`、`null`）一律忽略
+- 无 `content_list` 字段时回退到 `message.content`
 
-## 退出码
-- `0`：全部成功
-- `1`：存在失败项（见 `error.log`）
+### 时间
 
-## 8. 日志与进度
-- 进度条：`indicatif`
-  - 批处理显示文件级进度
-  - 大 JSON 单文件可显示会话级进度
-- 日志：
-  - 受 `RUST_LOG` 控制
-  - 默认 `info`
-  - `debug` 级可输出更多提取细节（如 tags）
+- 来源：Metadata 用 `created_at`，zip 排序用 `updated_at`（缺失回退 `created_at`）
+- 接受秒级 / 毫秒级（`>= 10_000_000_000` 视为毫秒）/ 数字字符串
+- 输出按**本地时区**渲染
 
-## 9. 测试覆盖目标
-- 单文件小 JSON 转换断言
-- 大 JSON 拆分文件数与 `data.len()` 一致
-- 目录模式输出结构校验
-- `meta` 缺失时回退策略校验
-- Windows 拖拽式调用校验
+## 6. 命名规则
 
-## 10. 性能目标（参考）
-- 目标：8C/16G 环境下，1 万文件处理时间不超过约 30 秒
-- 依赖因素：磁盘性能、JSON 大小与结构复杂度
+`sanitize_filename(name, max_len)`（对齐 JS）：
+
+1. `\ / : * ? " < > |` → `_`
+2. 控制符 → 空格
+3. 连续空白折叠为单个空格
+4. 超长按**字符**截断到 `max_len`，再去掉尾部空白 / `.` / `_` / `-`
+5. 结果为空 → `untitled`
+
+| 场景 | 上限 | 结果 |
+| --- | --- | --- |
+| 单体 `.md` | 60 | `<title>.md`（title 空则用 `id`） |
+| zip 文件 | — | `chat-export-qwen-all-<epoch_ms>.zip` |
+| zip 内条目 | 100 | `<YYYYMMDD-HHMMSS>-<title>.md` |
+
+- zip 内条目重名追加 `-2`、`-3`…
+- 无时间的会话排在有时间的之后（保持原相对顺序），条目前缀改用补零序号
+
+## 7. 并发与性能
+
+- 渲染阶段使用 `rayon` 的 `par_iter` 并行
+- ZIP 写入串行（`zip` crate 的 writer 需要可变借用），压缩方式 `Deflate`
+- 实测：195 会话 / 9.5 MB 导出 → 1.1 秒产出 1.0 MB zip
+
+## 8. 错误处理与退出码
+
+- 单个输入失败：记录 warning，继续处理其余输入，`failed += 1`
+- 数组 / `data` 内单个会话解析失败：记入 `failures`，打包时写入 `export-failures.md`
+- 输入数组为空数组 / 全部项非法 → 报错退出
+- 退出码：`0` 全部成功；`1` 有失败项
+
+## 9. 日志与进度
+
+- 日志：`env_logger`，`RUST_LOG` 控制，默认 `info`
+- 进度条：`indicatif`，渲染阶段按会话递增；非 TTY 时默认关闭
+
+## 10. 编码
+
+- 输入：UTF-8，**允许 BOM**（读取时剥离，因为 `serde_json` 不接受 BOM）
+- 输出：UTF-8 无 BOM，`LF`
+
+## 11. 测试覆盖
+
+- 输入形态：顶层数组 / 包装 `data` 数组 / `data` 单对象 / bare 对象 / 非会话 JSON 拒绝
+- 关键回归：`data` 数组长度 1 仍应产出 zip
+- 内容：phase 分派、`thinking_summary` 的 `extra` 取值、工具 phase 忽略、无思考时不输出 Response 头
+- 文本：井号转加粗、**代码围栏内不转**、BOM 输入
+- 命名：`sanitize_filename` 边界、zip 条目时间降序、同时间戳加后缀
+- CLI：拖拽式调用、`-o` 目录 / 文件、多输入
+- 一致性：与 JS golden fixture 逐字节比对（人工脚本，见 README）

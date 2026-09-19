@@ -1,3 +1,5 @@
+<!-- 同步自 AfterChat-Script-Dev/docs/ChatFormat.md（唯一权威源）；请勿在此单独修改，改动请回上游。 -->
+
 # 对话文件格式规范
 
 本节是“供应商 JSON -> AfterChat Markdown”的**目标契约**。后续让 LLM 写转换器时，直接以本节为准。
@@ -7,28 +9,14 @@
 - 文件扩展名：`.md`
 - 编码：UTF-8（允许 BOM）
 - 换行：`LF` 或 `CRLF` 均可
-- 文件标题：默认取文件名（去掉 `.md`），不从正文提取
 
 ### 2 顶部 Metadata 区（可选）
 
 Metadata 位于 `## Conversation` 之前，推荐使用以下键：
 
 - `- **Model:** \`<model-name>\``
-- `- **Tags:** <tag-list>`
-
-其中 `Tags` 已纳入解析，支持以下写法（任选其一）：
-
-- 反引号 + 逗号分隔：``- **Tags:** `ai/prompt, python, debug` ``
-- 反引号 + 分号分隔：``- **Tags:** `ai/prompt;python;debug` ``
-- Hashtag 形式：`- **Tags:** #ai/prompt #python #debug`
-- JSON-like 数组：`- **Tags:** ["ai/prompt", "python", "debug"]`
-- 纯文本分隔：`- **Tags:** ai/prompt, python, debug`
-
-`Tags` 归一化规则（解析后入库前）：
-
-- 去掉首尾空白、包裹引号/反引号、前导 `#`
-- 逗号/分号优先作为分隔符；若均不存在则按空白分隔
-- 大小写不敏感去重（保留首次出现的写法）
+- `- **Time:** \`<time>\``
+- `- **URL:** \`<url>\``
 
 ### 3 Conversation 正文区
 
@@ -42,13 +30,16 @@ Metadata 位于 `## Conversation` 之前，推荐使用以下键：
 
 - 用户消息头建议固定为：`### 🧑‍💻 User`
 - 助手消息头建议固定为：`### 🤖 Assistant`
-- 解析器实际按关键字识别：`### ... User ...` / `### ... Assistant ...`
+- 系统提示消息头建议固定为：`### ⚙️ System`（可选，无系统提示时可省略）
+- 未识别的角色可以用 `### 🤖 Assistant` 兜底
 
 消息体规则：
 
 - 一条消息内容范围：当前角色头到下一个角色头之间的文本
 - 保留原 Markdown 内容（代码块、列表、引用等）
 - 顺序必须与原始对话时间顺序一致
+- **不保留 markdown 井号标记**：消息体中的 `#` `##` `###` 等标题，应转换为 `**加粗**` 形式。
+  - **代码块内部除外**：围栏（```` ``` ```` / `~~~`）之内的 `#` 是代码/注释，必须原样保留，不得改写。
 
 Thought/Response（可选）：
 

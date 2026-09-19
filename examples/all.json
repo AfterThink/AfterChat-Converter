@@ -1,0 +1,62 @@
+{
+  "success": true,
+  "request_id": "demo-request-0001",
+  "data": [
+    {
+      "id": "demo-all-0002",
+      "title": "第二个会话",
+      "created_at": 1789787400,
+      "updated_at": 1789787450,
+      "chat": {
+        "messages": [
+          {
+            "id": "u2",
+            "role": "user",
+            "content": "再帮我写一个最小的 dataloader。",
+            "models": ["qwen3.5-plus"]
+          },
+          {
+            "id": "a2",
+            "role": "assistant",
+            "content": "",
+            "modelName": "Qwen3.5-Plus",
+            "content_list": [
+              {
+                "phase": "answer",
+                "content": "```python\n# 最小 dataloader\ndef batches(xs, size=4):\n    for i in range(0, len(xs), size):\n        yield xs[i:i + size]\n```"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo-all-0001",
+      "title": "第一个会话",
+      "created_at": 1789787193,
+      "updated_at": 1789787251,
+      "chat": {
+        "messages": [
+          {
+            "id": "u1",
+            "role": "user",
+            "content": "你好，请列出三个训练前的检查项。",
+            "models": ["qwen3.5-plus"]
+          },
+          {
+            "id": "a1",
+            "role": "assistant",
+            "content": "",
+            "modelName": "Qwen3.5-Plus",
+            "content_list": [
+              {
+                "phase": "answer",
+                "content": "1. 数据是否随机打散\n2. 学习率是否合理\n3. 是否记录了显存峰值"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

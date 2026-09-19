@@ -4,60 +4,67 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use env_logger::Env;
-use log::{error, info, warn};
+use log::{error, info};
 use qwen_json_converter::{ConvertOptions, run_conversion};
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "qwen-json-converter",
+    name = "qwen",
     version,
-    about = "Convert Qwen export JSON into markdown conversations"
+    about = "把 Qwen 导出的 JSON 会话转换为 AfterChat 对话 Markdown / ZIP"
 )]
 struct Cli {
-    /// Input file or directory
-    input: PathBuf,
+    /// 输入 JSON 文件（可直接拖拽；单体导出→.md，全部导出→.zip）
+    #[arg(value_name = "JSON", required = true)]
+    input: Vec<PathBuf>,
 
-    /// Output path
-    #[arg(short, long)]
+    /// 输出文件或目录（省略则输出到源文件同目录）
+    #[arg(short, long, value_name = "PATH")]
     output: Option<PathBuf>,
+
+    /// 强制开启/关闭进度条（默认跟随终端）
+    #[arg(long, value_name = "BOOL")]
+    progress: Option<bool>,
 }
 
 fn main() -> ExitCode {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
     let cli = Cli::parse();
-    match run(cli) {
-        Ok(code) => code,
-        Err(err) => {
-            error!("{err:#}");
-            ExitCode::from(1)
-        }
-    }
-}
+    let show_progress = cli
+        .progress
+        .unwrap_or_else(|| std::io::stdout().is_terminal());
 
-fn run(cli: Cli) -> anyhow::Result<ExitCode> {
-    let show_progress = std::io::stdout().is_terminal();
-
-    let summary = run_conversion(ConvertOptions {
-        input: cli.input.clone(),
+    let summary = match run_conversion(ConvertOptions {
+        inputs: cli.input,
         output: cli.output,
         show_progress,
-    })?;
+    }) {
+        Ok(summary) => summary,
+        Err(err) => {
+            error!("{err:#}");
+            return ExitCode::from(1);
+        }
+    };
 
-    info!(
-        "converted {} -> {} markdown files ({} failed files)",
-        cli.input.display(),
-        summary.generated_files,
-        summary.failed_files
-    );
-
-    if let Some(error_log) = summary.error_log {
-        warn!("errors were logged to {}", error_log.display());
+    for path in &summary.outputs {
+        info!("generated {}", path.display());
     }
 
-    if summary.failed_files > 0 {
-        Ok(ExitCode::from(1))
+    if summary.failed > 0 {
+        error!(
+            "converted {}/{} input(s), {} failed",
+            summary.outputs.len(),
+            summary.inputs,
+            summary.failed
+        );
+        ExitCode::from(1)
     } else {
-        Ok(ExitCode::SUCCESS)
+        info!(
+            "converted {}/{} input(s)",
+            summary.outputs.len(),
+            summary.inputs
+        );
+        ExitCode::SUCCESS
     }
 }

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "demo-single-0001",
+    "title": "单体导出示例",
+    "created_at": 1789787251,
+    "updated_at": 1789787300,
+    "chat": {
+      "messages": [
+        {
+          "id": "u1",
+          "role": "user",
+          "content": "帮我看看这段配置对不对？\n\n```yaml\n# 训练配置\nbatch_size: 8\nlearning_rate: 1e-4\n```",
+          "models": ["qwen3.5-plus"]
+        },
+        {
+          "id": "a1",
+          "role": "assistant",
+          "content": "",
+          "reasoning_content": null,
+          "modelName": "Qwen3.5-Plus",
+          "models": ["qwen3.5-plus"],
+          "content_list": [
+            {
+              "phase": "think",
+              "content": "先确认 batch_size 与显存的关系，再看学习率是否需要 warmup。"
+            },
+            {
+              "phase": "thinking_summary",
+              "content": "",
+              "extra": {
+                "summary_title": { "content": ["检查配置要点"] },
+                "summary_thought": {
+                  "content": ["batch_size 偏大容易 OOM", "确认是否启用梯度累积"]
+                }
+              }
+            },
+            {
+              "phase": "web_search",
+              "content": "（工具过程，不会出现在输出里）"
+            },
+            {
+              "phase": "answer",
+              "content": "配置整体没问题。\n\n# 建议\n\n把 `batch_size` 降到 4，观察显存占用后再决定是否配合梯度累积。"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
