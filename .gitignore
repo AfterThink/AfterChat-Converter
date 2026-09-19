@@ -1,2 +1,4 @@
 *.json
+*.zip
 target/
+__pycache__/
