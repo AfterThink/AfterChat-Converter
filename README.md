@@ -47,8 +47,8 @@ chat-export-rikka-all-1730000000000.zip
 
 | 文件 | 说明 |
 | --- | --- |
-| `afterchat-converter_<版本>_x64-setup.exe` | 桌面应用，拖拽即转 |
-| `afterchat-converters-<版本>-windows-x64.zip` | 5 个命令行转换器，解压即用 |
+| `afterchat-converter_<版本>_x64-setup.exe` | 安装包：桌面应用（含开始菜单快捷方式与卸载） |
+| `afterchat-converter-<版本>-windows-x64.zip` | 绿色免安装：解压后双击 `afterchat-converter.exe` 即用 |
 
 ## 用法
 
@@ -62,7 +62,7 @@ chat-export-rikka-all-1730000000000.zip
 
 ### 命令行
 
-解压 `afterchat-converters-<版本>-windows-x64.zip`，里面有 5 个可执行文件：
+安装包目录或绿色版解压目录里都有这 5 个可执行文件：
 
 ```powershell
 rikka     RikkaHub-backup.zip        # RikkaHub 备份（自动解压并读 SQLite）

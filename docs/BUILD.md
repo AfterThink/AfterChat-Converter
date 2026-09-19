@@ -96,8 +96,8 @@ push 到 `master`、提 PR 或手动触发时运行：
    - **已存在** → 跳过，什么都不做
    - **不存在** → 构建 GUI + sidecar → 自动打 `v<version>` 标签 → 创建 Release
 4. 上传的产物：
-   - `afterchat-converter_<version>_x64-setup.exe` — GUI 安装包（NSIS）
-   - `afterchat-converters-<version>-windows-x64.zip` — 5 个命令行转换器打包
+   - `afterchat-converter_<version>_x64-setup.exe` — 安装包（NSIS）：GUI + 5 个转换器
+   - `afterchat-converter-<version>-windows-x64.zip` — 绿色免安装版：GUI + 5 个转换器
 
 > 发布只用仓库内置的 `GITHUB_TOKEN`，不需要任何跨仓库 token；仓库私有或公开都能用。
 

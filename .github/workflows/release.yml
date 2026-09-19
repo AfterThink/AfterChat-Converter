@@ -73,22 +73,23 @@ jobs:
         if: steps.version.outputs.should_release == 'true'
         shell: pwsh
         run: |
-          $version  = "${{ steps.version.outputs.version }}"
-          $cliName  = "afterchat-converters-$version-windows-x64"
+          $version = "${{ steps.version.outputs.version }}"
+          $zipName = "afterchat-converter-$version-windows-x64"
 
           New-Item -ItemType Directory -Force dist | Out-Null
 
           # 1) GUI installer (NSIS)
           Copy-Item target/release/bundle/nsis/*.exe dist/
 
-          # 2) the five CLI converters -> one zip
-          $cliDir = "dist/$cliName"
-          New-Item -ItemType Directory -Force $cliDir | Out-Null
+          # 2) portable bundle: GUI + the five converters -> one zip
+          $portable = "dist/$zipName"
+          New-Item -ItemType Directory -Force $portable | Out-Null
+          Copy-Item target/release/afterchat-converter.exe $portable/
           foreach ($bin in @("ai-studio", "cherry", "qwen", "claude", "rikka")) {
-            Copy-Item "target/release/$bin.exe" $cliDir/
+            Copy-Item "target/release/$bin.exe" $portable/
           }
-          Compress-Archive -Path "$cliDir/*" -DestinationPath "dist/$cliName.zip" -Force
-          Remove-Item -Recurse -Force $cliDir
+          Compress-Archive -Path "$portable/*" -DestinationPath "dist/$zipName.zip" -Force
+          Remove-Item -Recurse -Force $portable
 
           Get-ChildItem dist | Select-Object Name, @{n = 'Size'; e = { "{0:N0} KB" -f ($_.Length / 1KB) } } | Format-Table
 
