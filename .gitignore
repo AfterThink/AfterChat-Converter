@@ -1,0 +1,8 @@
+/target
+/.out
+/.probe
+/.probe2
+*.exe
+
+# 真实对话备份不入库（含隐私内容）；测试用合成库
+rikkahub_backup_*.zip
