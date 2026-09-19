@@ -1,25 +1,24 @@
-# qwen
+# qwen 转换器规格
 
-> 目标契约见 [`../CHATFORMAT.md`](../CHATFORMAT.md)。本文描述 `qwen` 工具的具体实现规格。
+> 输出契约定义参见 [`../CHATFORMAT.md`](../CHATFORMAT.md)。
 
-## 1. 范围
+## 1. 范围与目标
 
-把 Qwen 网页版导出的 JSON 会话转换为 AfterChat 对话 Markdown（单体）或 ZIP（全部）。
-输出格式为程序内置，不依赖外部模板。
+本工具用于将 Qwen（通义千问）网页版导出的 JSON 会话数据转换为规范的 AfterChat Markdown（单会话）或 ZIP 归档包（多会话）。
 
-## 2. CLI 设计
+## 2. 命令行接口 (CLI)
 
-```
+```powershell
 qwen <JSON>... [-o <PATH>] [--progress <BOOL>]
 ```
 
-无子命令 —— 可直接把文件拖到可执行文件上。
+支持作为独立命令行程序运行，亦支持在 Windows 环境下直接将文件拖拽至 `qwen.exe` 上执行。
 
 | 参数 | 必填 | 说明 |
 | --- | --- | --- |
 | `<JSON>...` | 是 | 一个或多个输入 JSON 文件路径 |
-| `-o, --output <PATH>` | 否 | 输出文件（`.md`/`.zip`）或目录；省略则写到各源文件同目录 |
-| `--progress <BOOL>` | 否 | 强制开关进度条；默认 `stdout().is_terminal()` |
+| `-o, --output <PATH>` | 否 | 输出目标路径（`.md` / `.zip` 或目录）；省略则输出至各源文件同级目录 |
+| `--progress <BOOL>` | 否 | 显式控制进度条显示；默认跟随 `stdout().is_terminal()` |
 
 ### 参数校验
 
@@ -39,8 +38,7 @@ qwen <JSON>... [-o <PATH>] [--progress <BOOL>]
 | 对象，顶层含 `chat` | 兼容单体 | `.md` |
 | 其它 / 缺 `chat` | 拒绝 | 报错退出 |
 
-> 形态由**结构**决定，不由数量决定：`data` 数组即使只有 1 个会话也打包成 `.zip`，
-> 这样「全部导出」语义稳定。
+> 形态判定原则：输出类型由数据结构决定而非会话数量。`data` 为数组时即使仅包含 1 个会话亦打包为 `.zip`，以保持“全量导出”的行为确定性。
 
 ### 会话结构（用到的字段）
 
@@ -103,9 +101,9 @@ qwen <JSON>... [-o <PATH>] [--progress <BOOL>]
 <空行>
 ```
 
-- **Metadata 只有 `Model` / `Time` / `URL` 三键**（对齐 JS 当前实现，并符合 ChatFormat 对 Metadata 的「推荐键」）
-- 整篇以 `lines.join("\n")` 拼接，与 JS 的 `lines.join('\n')` 一致
-- 没有任何思考时，`#### 💡 Response` 头**不输出**（直接是正文）
+- Metadata 包含 `Model`、`Time` 与 `URL` 标准键；
+- 换行格式采用 `\n` (LF)；
+- 当助手无思考过程时，不输出 `#### 🤔 Thought Process` 与 `#### 💡 Response`，回复正文直接跟在角色头后。
 
 ### 角色头
 
@@ -196,10 +194,10 @@ qwen <JSON>... [-o <PATH>] [--progress <BOOL>]
 
 ## 11. 测试覆盖
 
-- 输入形态：顶层数组 / 包装 `data` 数组 / `data` 单对象 / bare 对象 / 非会话 JSON 拒绝
-- 关键回归：`data` 数组长度 1 仍应产出 zip
-- 内容：phase 分派、`thinking_summary` 的 `extra` 取值、工具 phase 忽略、无思考时不输出 Response 头
-- 文本：井号转加粗、**整条标题加粗**（吸收内层 `**`，行内代码除外）、**代码围栏内不转**、BOM 输入
-- 命名：`sanitize_filename` 边界、zip 条目时间降序、同时间戳加后缀
-- CLI：拖拽式调用、`-o` 目录 / 文件、多输入
-- 一致性：与 JS golden fixture 逐字节比对（人工脚本，见 README）
+- 输入形态判定：顶层数组 / `data` 数组 / `data` 单对象 / 扁平对象 / 非会话 JSON 校验；
+- 关键回归：`data` 数组长度为 1 时仍应打包为 ZIP；
+- 内容转换校验：各 phase 分派、`thinking_summary` 提取、工具 phase 忽略逻辑；
+- 文本处理校验：标题转加粗、内层加粗吸收、代码围栏保护；
+- 命名与排序校验：文件名清洗边界、时间倒序排列、重名后缀；
+- CLI 调用校验：拖拽调用、`-o` 指定目录或文件、多文件输入；
+- 数据一致性：与基准测试数据（Golden Fixtures）比对验证。

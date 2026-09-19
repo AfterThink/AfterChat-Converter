@@ -1,63 +1,75 @@
-# claude
+# claude 转换器规格
 
-> 输出契约见 [`../CHATFORMAT.md`](../CHATFORMAT.md)（下称「契约」）。
+> 输出契约定义参见 [`../CHATFORMAT.md`](../CHATFORMAT.md)。
 
-把 Claude 数据导出（`conversations.json`，可选包成 ZIP）转换为符合契约的 **Markdown ZIP**。
+本工具用于将 Claude 导出的数据备份（`conversations.json`，或包含该文件的 ZIP 压缩包）转换为符合规范的 **Markdown ZIP** 归档包。
 
-## 输入
+---
 
-接受三种形态，按扩展名判定：
+## 输入格式
 
-| 输入 | 说明 |
+支持三种输入形态，程序根据文件扩展名与路径类型自动判定：
+
+| 输入类型 | 说明 |
 | --- | --- |
-| `*.zip` | Claude 数据导出压缩包，从包内任意层级、大小写不敏感地找 `conversations.json` |
-| `*.json` | 直接给 `conversations.json` |
-| 目录 | 递归查找目录下的 `conversations.json`（只取最外层一个） |
+| `*.zip` | Claude 数据导出压缩包，自动在包内递归检索 `conversations.json`（忽略大小写与目录层级） |
+| `*.json` | 显式传入 `conversations.json` 文件 |
+| 目录路径 | 递归扫描该目录下存在的 `conversations.json`（仅提取首个匹配项） |
 
-`conversations.json` 是**对话数组**，每条对话的字段：
+`conversations.json` 数据结构为**会话对象数组**，单个会话的核心字段定义：
 
 | 字段 | 类型 | 用途 |
 | --- | --- | --- |
-| `uuid` | string | 平台 ID，写进失败报告 |
-| `name` | string | 标题（可能为空） |
-| `summary` | string | 目前恒为空，忽略 |
-| `created_at` | RFC3339 字符串（含微秒 + `Z`） | `Time` 与排序键（转本地时间） |
+| `uuid` | string | 会话平台 ID，解析异常时记入失败报告 |
+| `name` | string | 对话标题（允许为空） |
+| `summary` | string | 摘要（当前版本多为空值，忽略） |
+| `created_at` | RFC3339 字符串（含微秒与 `Z`） | 用于生成 Metadata `Time` 与排序键（转换为本地时区时间） |
 | `updated_at` | RFC3339 字符串 | 忽略 |
 | `account` | object | 忽略 |
 | `chat_messages` | array | 消息列表 |
 
-消息字段：
+消息对象的核心字段定义：
 
 | 字段 | 类型 | 用途 |
 | --- | --- | --- |
 | `uuid` | string | 忽略 |
-| `text` | string | 纯文本正文（可能为空） |
-| `content` | array | 结构化内容，元素 `type` ∈ `text` / `tool_use` / `tool_result` / `token_budget` |
-| `sender` | `human` \| `assistant` | 角色映射：`human` → User，`assistant` → Assistant，其它 → Assistant |
-| `created_at` / `updated_at` | RFC3339 | 仅排序参考 |
-| `attachments` | array | 附件，渲染为 `[name](attachment)` |
-| `files` | array | 附带文件，忽略 |
+| `text` | string | 文本正文（可能为空） |
+| `content` | array | 结构化内容数组，元素 `type` 包括 `text` / `tool_use` / `tool_result` / `token_budget` |
+| `sender` | `human` \| `assistant` | 角色映射：`human` → User，`assistant` → Assistant，其他未知类型兜底为 Assistant |
+| `created_at` / `updated_at` | RFC3339 | 仅作为消息时序参考 |
+| `attachments` | array | 附件列表，渲染为 `[name](attachment)` |
+| `files` | array | 关联文件列表，忽略 |
 
-> **没有 `model` 字段。** 已用正则在最外层 key、`content[].input`、`name` 等处搜索 `model` / `sonnet` / `haiku` / `opus` 均无结果，因此 `Model` 一律写 `Unknown`。
+> **模型字段说明**：Claude 官方导出数据中未包含会话所用模型的标识字段，因此 Metadata 中的 `Model` 字段统一填充为 `Unknown`。
 
-## 输出
+---
 
-只有一个产物：`chat-export-claude-all-{毫秒时间戳}.zip`（或 `-o` 指定的 `.zip` / 目录）。
+## 输出规范
 
-- 条目名：`{YYYYMMDD-HHmmss}-{标题}.md`（契约 §6，本平台不按助手分组）。
-- 排序：`created_at` 从新到旧。
-- 没有任何消息的对话不生成条目，汇总进 `export-failures.md`（`id` = `uuid`），进程仍以 0 退出。
+产物为单个 ZIP 归档文件：`chat-export-claude-all-{毫秒时间戳}.zip`（或 `-o` 选项指定的路径）：
 
-## 用法
+- **条目命名**：`{YYYYMMDD-HHmmss}-{标题}.md`（遵循契约 §6，Claude 平台不设助手分组目录）；
+- **排序规则**：依据 `created_at` 从新到旧排列；
+- **异常处理**：无有效消息内容的空会话不生成 `.md` 条目，统一记录至包内的 `export-failures.md`（记录 `uuid`），程序保持正常退出。
+
+---
+
+## 使用方法
 
 ```powershell
-cargo run -p afterchat-claude -- data-2026-03-17-12-33-08-batch-0000.zip
-cargo run -p afterchat-claude -- conversations.json -o out\
-cargo run -p afterchat-claude -- exported-dir/ -o out\result.zip
+# 编译二进制
+cargo build --release -p afterchat-claude
+
+# 运行转换
+claude data-2026-03-17-12-33-08-batch-0000.zip
+claude conversations.json -o out\
+claude exported-dir/ -o out\result.zip
 ```
 
-## 实现
+---
 
-- `src/lib.rs`：输入发现（`find_conversations_json`）、`Conversation`/`Message` 映射、`run_conversion`。
-- `src/main.rs`：clap CLI。
-- 渲染 / 命名 / 打包全部交给 `chatformat`，本 crate 不含 Markdown 拼接逻辑。
+## 模块实现
+
+- `src/lib.rs`：负责输入定位（`find_conversations_json`）、数据映射至 `Conversation`/`Message` 及主转换流调度；
+- `src/main.rs`：基于 `clap` 的 CLI 命令入口；
+- 文本渲染、非法字符清理与 ZIP 打包统一委托公共库 `afterchat-chatformat` 处理。

@@ -1,29 +1,29 @@
-# 架构
+# 系统架构
 
-本仓库把「**输入各家备份 → 输出统一 ChatFormat**」拆成两层：
+本仓库采用分层设计，将「**解析源数据 → 导出规范 ChatFormat**」划分为两个主要层级：
 
-1. **`crates/afterchat-chatformat`**：与平台无关的公共库。所有转换器都只负责「把自家 JSON/SQLite 映射成 `Conversation`」，剩下的渲染、命名、时间、ZIP 打包全部由它完成。
-2. **`crates/afterchat-<platform>`**：各平台的解析器 + CLI，尽量只保留「读输入、抽字段」的逻辑。
+1. **`crates/afterchat-chatformat`**：平台无关的公共核心库。各转换器仅需负责将特定平台的 JSON/SQLite 数据结构映射为标准的 `Conversation` 模型；后续的 Markdown 渲染、文件命名、时间解析与 ZIP 打包归档全部由该库统一处理。
+2. **`crates/afterchat-<platform>`**：各平台的专用解析器与 CLI 二进制。职责仅限于读取输入文件并提取有效会话数据。
 
-这样做的目的：5 个转换器输出的 Markdown 与 ZIP 结构**逐字节一致**，改契约时只动一个地方。
+该架构确保各转换器产出的 Markdown 与 ZIP 归档结构保持严格一致，且在格式规范升级时仅需维护公共库。
 
 ---
 
-## 分层
+## 分层设计
 
 ```
-crates/afterchat-chatformat   纯 lib，不读文件、不写文件（ZIP 写入除外，见 §6）
+crates/afterchat-chatformat   纯 lib，无文件 I/O（ZIP 写入除外，见 §6）
   ├── lib.rs                  数据模型 Conversation / Message / Role / MetadataLine + render()
   ├── markdown.rs             契约 §5：# 标题 → **加粗**，代码围栏 / 行内代码保护
   ├── naming.rs               契约 §7：非法字符清理、长度截断、路径段兜底
   ├── time.rs                 本地时间格式化、RFC3339 / epoch 解析、ZIP DOS 时间
   └── zip.rs                  契约 §6：排序、条目命名、重名 -2/-3、失败报告、mtime
 
-crates/afterchat-<platform>   bin，只做输入解析 → Conversation
-gui/                          Tauri 桌面壳，sidecar 调用上面的 bin
+crates/afterchat-<platform>   bin，输入解析与字段提取 → Conversation
+gui/                          基于 Tauri 的桌面客户端，通过 Sidecar 调用上述 bin
 ```
 
-### chatformat 的数据模型
+### chatformat 数据模型
 
 ```rust
 Conversation {
@@ -33,53 +33,53 @@ Message { role: Role, thinking: Vec<String>, body: Vec<String> }
 Role::{System, User, Assistant}
 ```
 
-- `model` 缺失时由转换器填 `UNKNOWN_MODEL = "Unknown"`（契约 §2 要求 Model 键始终存在）。
-- `extra` 用来放平台特有的 Metadata 键（如 `Conversation ID` / `Topic ID` / `Assistant`）。
-- `group` 非空时，ZIP 条目会放进 `<group>/` 子目录（cherry / rikka 用助手名分组）。
-- `thinking` 只对 `Role::Assistant` 有意义：非空时渲染 `#### 🤔 Thought Process`，并在有正文时补 `#### 💡 Response`。
+- `model` 缺失时由转换器填充 `UNKNOWN_MODEL = "Unknown"`（契约 §2 规定 Model 键为必填）。
+- `extra` 用于记录平台特定的 Metadata 扩展键（如 `Conversation ID` / `Topic ID` / `Assistant`）。
+- `group` 非空时，ZIP 内条目将归类至 `<group>/` 子目录（cherry / rikka 按助手名称分组）。
+- `thinking` 仅针对 `Role::Assistant` 生效：非空时渲染 `#### 🤔 Thought Process`，且在包含回复正文时补充 `#### 💡 Response`。
 
-### 转换器映射
+### 转换器数据映射
 
-| crate | 输入 | 时间来源 | `group` | 额外 Metadata |
+| crate | 输入 | 时间戳来源 | `group` | 扩展 Metadata |
 | --- | --- | --- | --- | --- |
 | `ai-studio` | `chunkedPrompt.chunks[]` | 输入文件 mtime | 无（单文件 / 目录树输出） | `Temperature` / `Top P` / `Top K` / `Max Output Tokens` |
-| `cherry` | `data.json` 的 topics + message_blocks | `createdAt`（RFC3339 或数字） | 助手名 | `Topic ID` / `Assistant` |
-| `qwen` | 导出的 sessions JSON | session 时间字段 | 助手名 | `Conversation ID` |
-| `claude` | `conversations.json` | `created_at`（RFC3339 UTC → 本地） | 无 | — |
-| `rikka` | SQLite（`ConversationEntity` + `message_node`） | `createAt` 毫秒 | 助手名 | `Conversation ID` / `Assistant` |
+| `cherry` | `data.json` 的 topics + message_blocks | `createdAt`（RFC3339 或数字时间戳） | 助手名称 | `Topic ID` / `Assistant` |
+| `qwen` | 导出的 sessions JSON | session 时间字段 | 助手名称 | `Conversation ID` |
+| `claude` | `conversations.json` | `created_at`（RFC3339 UTC 转换为本地时间） | 无 | — |
+| `rikka` | SQLite（`ConversationEntity` + `message_node`） | `createAt`（毫秒时间戳） | 助手名称 | `Conversation ID` / `Assistant` |
 
 ### 输出形态
 
-- `claude` / `cherry` / `qwen` / `rikka`：**永远输出 ZIP**（`chat-export-{platform}-all-{ms}.zip`）。
-  - 空对话不生成 md，改为汇总进包内 `export-failures.md`，进程仍然退出 0。
-- `ai-studio`：**保留 Markdown 形态**（JSON 本就单会话，输出 `.md` / `.md` 目录树），不做 ZIP 包装。
+- `claude` / `cherry` / `qwen` / `rikka`：**统一输出 ZIP 压缩包**（`chat-export-{platform}-all-{ms}.zip`）。
+  - 无有效消息的空会话不生成独立的 `.md`，而是汇总记录至包内的 `export-failures.md`，进程正常退出。
+- `ai-studio`：**保持 Markdown 格式**（源数据通常为单会话结构，直接输出 `.md` 或 `.md` 目录树），不进行 ZIP 包装。
 
 ---
 
-## 契约
+## 规范契约
 
-输出格式的权威定义是 [CHATFORMAT.md](./CHATFORMAT.md)（§1–§7）：
+输出格式的权威定义参见 [CHATFORMAT.md](./CHATFORMAT.md)（§1–§7）：
 
 1. §1 顶层结构：Metadata + Conversation
-2. §2 Metadata 键（Model / Time / URL + 平台扩展）
+2. §2 Metadata 键（Model / Time / URL 及平台扩展键）
 3. §3 消息结构（System / User / Assistant、Thought Process / Response）
-4. §4 角色兜底规则
-5. §5 行内语法：`#` 标题转 `**加粗**`，代码围栏与行内代码不动
-6. §6 ZIP 打包：`{group}/{YYYYMMDD-HHmmss}-{title}.md`、时间降序、`export-failures.md`
-7. §7 文件名：删除非法字符、长度上限、空标题兜底 `Untitled_Conversation`
+4. §4 角色识别与兜底策略
+5. §5 行内语法规则：`#` 标题转 `**加粗**`，代码围栏与行内代码保护
+6. §6 ZIP 打包规范：`{group}/{YYYYMMDD-HHmmss}-{title}.md`、时间降序排列与 `export-failures.md`
+7. §7 文件名规则：非法字符清理、长度截断与空标题兜底 `Untitled_Conversation`
 
-任何转换器**不得**自行拼 Markdown / 自行写 ZIP；需要新行为时先改契约，再改 `chatformat`。
+任何转换器**不得**自行拼接 Markdown 或构建 ZIP；若需变更输出规范，须优先更新契约并调整 `chatformat` 公共库。
 
 ---
 
 ## 测试策略
 
-- `crates/afterchat-chatformat`：单元测试覆盖转义、命名、时间、排序、重名、失败报告。
-- 每个转换器：`tests/integration_cli.rs` 用**合成 fixture**（不提交真实备份）跑一遍完整 CLI，断言 ZIP 条目名、排序、Metadata 与消息结构。
-- GUI：`gui/` 下的路由逻辑是纯 JS 分支，改动时以手动拖拽验证为主。
+- `crates/afterchat-chatformat`：单元测试覆盖字符转义、命名截断、时间解析、排序逻辑、重名处理与失败报告生成。
+- 转换器集成测试：每个转换器在 `tests/integration_cli.rs` 中使用**合成测试数据（Fixture）**验证完整 CLI 执行流程，断言 ZIP 条目名、排序、Metadata 与消息体结构。
+- GUI：`gui/` 下的路由逻辑为前端分支判断，变更时以手动交互验证为主。
 
 ---
 
-## 历史
+## 仓库演进历史
 
-本仓库原先是「umbrella repo + 5 个 git submodule」。submodule + Cargo workspace 会导致双重提交、跨仓库 CI token、构建强耦合，因此已用 `git read-tree` 把 5 个子仓库的历史并入本仓库（`git log` 中仍能看到各自的提交），旧的独立仓库保留作为备份。详见提交 `2f599dc`。
+本仓库早期采用「主仓库 + 5 个 Git submodule」架构。由于 submodule 配合 Cargo workspace 存在多重提交繁琐、跨仓库 CI 权限复杂及构建耦合度高的问题，现已通过 `git read-tree` 将各子模块代码及历史提交合并为单一 Monorepo（`git log` 仍完整保留各模块历史），原有独立仓库已归档备份。详细记录参见提交 `2f599dc`。

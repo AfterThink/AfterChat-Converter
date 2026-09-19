@@ -1,150 +1,129 @@
-# ai-studio
+# ai-studio 转换器规格
 
-> 输出契约见 [`../CHATFORMAT.md`](../CHATFORMAT.md)。
+> 输出契约定义参见 [`../CHATFORMAT.md`](../CHATFORMAT.md)。
 
-本工具用于解析包含与大语言模型（LLM）多轮对话（可能包含思考过程）的 JSON 文件，并将其转换为易于阅读的 Markdown 格式。
+本工具用于解析 Google AI Studio 导出的对话 JSON 文件（包含多轮对话、思维链及模型配置），并转换为规范的 Markdown 格式。
 
-它使用 Rust 构建，并可编译为独立的可执行文件。
+采用 Rust 构建，编译为无外部运行时依赖的独立二进制程序。
 
 ---
 
 ## 功能特性
 
-- 解析代表对话的特定 JSON 结构（详见下文格式说明）。
-- 生成格式清晰的 Markdown 输出。
-- 如果 JSON 中存在元数据（如模型设置、系统指令），则会包含在输出中。
-- 区分用户回合 (`🧑‍💻 User`) 和助手回合 (`🤖 Assistant`)。
-- 当存在 `isThought` 标志时，使用子标题将助手的思考过程 (`🤔 Thought Process`) 与最终回复 (`💡 Response`) 分开。
-- 提供命令行接口（CLI）进行操作。
-- 支持 Windows 上的拖放功能，方便转换（将 JSON 文件拖到 `.exe` 文件上）。
-- 编译为单个、独立的可执行文件，无外部运行时依赖。
+- 解析 Google AI Studio 导出的 JSON 对话结构；
+- 输出符合 ChatFormat 规范的 Markdown 文档；
+- 提取并保留元数据（模型配置参数、系统指令 System Instruction）；
+- 区分用户消息 (`🧑‍💻 User`) 与模型消息 (`🤖 Assistant`)；
+- 根据 `isThought` 标记拆分模型的思维链 (`#### 🤔 Thought Process`) 与正式回复 (`#### 💡 Response`)；
+- 提供 CLI 命令行操作界面，并支持直接拖拽文件执行转换。
 
 ---
 
-## 先决条件
+## 构建方式
 
-**Rust 开发环境:** 你需要安装 Rust 编译器 (`rustc`) 和包管理器 (`cargo`)。
+在项目根目录下执行：
 
----
+```powershell
+cargo build --release -p afterchat-ai-studio
+```
 
-## 构建
-
-1.  克隆或下载此仓库。
-2.  在终端中进入项目目录。
-3.  运行 `cargo build --release` 进行优化后的发布构建（输出位于 `./target/release/`）。
+编译产物位于 `target/release/ai-studio.exe`。
 
 ---
 
 ## 使用方法
 
-假设可执行文件名为 google-ai-studio-json-converter.exe (Windows) 或 google-ai-studio-json-converter (Linux/macOS)。
+### 1. 命令行接口 (CLI)
 
-**1. 命令行接口 (CLI)**
-
-```markdown
-# 基本用法 (输出文件默认为同目录下的 [输入文件名].md)
-
-./path/to/executable <path/to/your_conversation.json>
+```powershell
+# 基本用法（默认在输入文件同级目录下生成同名 .md 文件）
+ai-studio <path/to/conversation.json>
 
 # 指定输出文件路径
+ai-studio <path/to/conversation.json> -o <path/to/output/result.md>
+ai-studio <path/to/conversation.json> --output <path/to/output/result.md>
 
-./path/to/executable <path/to/your_conversation.json> -o <path/to/output/result.md>
-./path/to/executable <path/to/your_conversation.json> --output <path/to/output/result.md>
-
-# 显示帮助信息
-
-./path/to/executable --help
+# 查看帮助信息
+ai-studio --help
 ```
 
-可选：在运行前设置 RUST_LOG=info 环境变量可以查看更详细的日志信息。
-
+可选环境变量：通过设置 `RUST_LOG=info` 控制日志输出级别：
 - PowerShell: `$env:RUST_LOG="info"`
-
 - CMD: `set RUST_LOG=info`
-
 - Bash/Zsh: `export RUST_LOG=info`
 
-**2. 拖放操作 (Windows)**
+### 2. 拖拽使用 (Windows)
 
-- 构建发布版本 (cargo build --release)。
+直接将 `.json` 对话文件拖拽至 `ai-studio.exe` 图标上，程序将在源文件所在目录下生成同名 `.md` 文件。
 
-- 在 ./target/release/ 目录中找到 google-ai-studio-json-converter.exe 文件。
-
-- 直接将你的 .json 对话文件拖拽到文件资源管理器中的 google-ai-studio-json-converter.exe 图标上。
-
-- 一个与 JSON 文件同名（但扩展名为 .md）的 Markdown 文件（例如 your_conversation.md）将在原始 JSON 文件所在的目录下被创建。
+---
 
 ## 输入 JSON 格式
 
-JSON 请从 Google Drive 中下载。本工具期望的 JSON 结构大致如下例所示：
+输入数据源自 Google AI Studio 导出的 JSON 文件（如保存在 Google Drive 或本地的会话导出）。预期的 JSON 数据结构如下：
 
 ```json
 {
   "runSettings": {
-    // 可选的元数据
+    // 模型配置元数据（可选）
     "model": "模型名称",
     "temperature": 1.0
-    // ... 其他设置
+    // ... 其他参数
   },
   "systemInstruction": {
-    // 可选的元数据
-    "text": "你是一个乐于助人的助手。"
+    // 系统提示词（可选）
+    "text": "系统指令内容..."
   },
   "chunkedPrompt": {
-    // 主要的对话容器
+    // 对话分块数据
     "chunks": [
-      // 对话回合数组
       {
-        "text": "用户的第一条消息。",
+        "text": "用户消息内容...",
         "role": "user"
-        // tokenCount 等字段（解析器会忽略）
       },
       {
-        "text": "助手的思考过程...",
+        "text": "思维链推导过程...",
         "role": "model",
-        "isThought": true // 区分思考过程的重要标志
+        "isThought": true // 标记思维链的关键布尔值
       },
       {
-        "text": "助手的实际回复。",
+        "text": "模型正式回复内容...",
         "role": "model",
-        "finishReason": "STOP" // 如果 isThought 缺失，默认为 false
+        "finishReason": "STOP" // 若 isThought 缺失，默认视为回复内容
       },
       {
-        "text": "用户的下一条消息。",
+        "text": "下一轮用户消息...",
         "role": "user"
       }
-      // ... 更多回合
     ]
-    // "pendingInputs": [...] // 解析器会忽略
   }
 }
 ```
 
-runSettings 和 systemInstruction 等字段是可选的。
+- `runSettings` 与 `systemInstruction` 为可选对象；
+- `chunks` 中主要提取 `role`（`"user"` 或 `"model"`）与 `text` 字段；
+- `isThought` 字段用于识别模型思考过程，缺失时默认为 `false`；
+- 若 `text` 字段为空或缺失，解析器将跳过该分块，不输出空白内容。
 
-在 chunks 中，role（"user" 或 "model"）和 text 是主要使用的字段。
+---
 
-isThought 布尔标志（在 "model" 回合内）对于区分思考过程至关重要。如果缺失，则默认为 false（被视为回复）。
+## 输出 Markdown 结构
 
-空的或缺失的 text 字段会被优雅处理（通常导致该部分不输出文本）。
-
-## 输出 Markdown 格式
-
-生成的 Markdown 文件将具有以下结构：
+生成的 Markdown 文件结构如下：
 
 ```markdown
 Conversation Transcript: [输入文件名（不含扩展名）]
 
-## Metadata (可选部分)
+## Metadata
 
 ### Run Settings
 
-- **设置 1:** `值1`
-- **设置 2:** `值2`
+- **Temperature:** `1.0`
+- **Model:** `gemini-1.5-pro`
 
 ### System Instruction
 
-系统指令文本放在这里。
+系统指令内容。
 
 ## Conversation
 
@@ -154,33 +133,21 @@ Conversation Transcript: [输入文件名（不含扩展名）]
 
 ### 🤖 Assistant
 
-#### 🤔 Thought Process (仅当 isThought=true 时出现)
+#### 🤔 Thought Process
 
-助手的思考过程文本。
+助手的思维链内容。
 
-#### 💡 Response (仅在思考过程之后出现，或在没有思考过程时直接出现在助手标题下)
+#### 💡 Response
 
-助手的回复文本。
-
-### 🧑‍💻 User
-
-下一条用户消息内容。
-
-### 🤖 Assistant
-
-助手的回复文本。
+助手的正式回复内容。
 ```
 
-## 依赖库
+---
 
-本项目主要使用了以下 Rust crates：
+## 核心依赖库
 
-clap: 用于解析命令行参数。
-
-serde / serde_json: 用于 JSON 反序列化。
-
-log / env_logger: 用于日志记录。
-
-anyhow: 提供便捷且带上下文的错误处理。
-
-regex: 用于清理输出中可能存在的多余空行。
+- `clap`：命令行参数解析；
+- `serde` / `serde_json`：JSON 结构反序列化；
+- `log` / `env_logger`：运行时日志管理；
+- `anyhow`：错误处理与上下文追踪；
+- `afterchat-chatformat`：统一契约渲染与文本处理。
