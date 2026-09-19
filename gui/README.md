@@ -28,7 +28,7 @@
 - `rustc` / `cargo`
 - Windows 下建议已安装 WebView2 Runtime
 
-当前仓库已经是 Cargo workspace，GUI 位于 `converter/gui`。
+当前仓库已经是 Cargo workspace，GUI 位于 `gui`。
 
 ## 国内源
 
@@ -43,27 +43,27 @@ registry=https://registry.npmmirror.com/
 ## 安装依赖
 
 ```powershell
-cd converter/gui
+cd gui
 bun install
 ```
 
 ## 开发启动
 
 ```powershell
-cd converter/gui
+cd gui
 bun tauri dev
 ```
 
 这条命令会自动做三件事：
 
 1. 编译 Rust 转换器 sidecar 到工作区 `target/`
-2. 复制 sidecar 到 `converter/gui/src-tauri/bin/`
+2. 复制 sidecar 到 `gui/src-tauri/bin/`
 3. 启动 Tauri 开发窗口（直接加载原生 HTML/JS/CSS，不依赖 Vite）
 
 ## 生产构建
 
 ```powershell
-cd converter/gui
+cd gui
 bun tauri build
 ```
 
@@ -86,7 +86,7 @@ bun tauri build
 ## 也可以手动执行的脚本
 
 ```powershell
-cd converter/gui
+cd gui
 bun run prepare:sidecars
 bun run prepare:sidecars:release
 bun run build
@@ -125,7 +125,7 @@ Converters.exe -l en
 已经默认切到 `npmmirror`。如果还慢，可以手动确认：
 
 ```powershell
-cd converter/gui
+cd gui
 Get-Content .npmrc
 ```
 
@@ -134,7 +134,7 @@ Get-Content .npmrc
 先执行：
 
 ```powershell
-cd converter/gui
+cd gui
 bun run prepare:sidecars:release
 ```
 

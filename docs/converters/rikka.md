@@ -1,6 +1,6 @@
-# 规格说明（SPEC）— rikkahub-db-converter
+# rikka
 
-> 输出契约见 [`CHATFORMAT-CONVERTER.md`](./CHATFORMAT-CONVERTER.md)（下称「契约」）。
+> 输出契约见 [`../CHATFORMAT.md`](../CHATFORMAT.md)（下称「契约」）。
 > 本文只描述 RikkaHub 这一平台的输入解析与实现细节。**契约第 1～7 节必须逐字遵守。**
 >
 > 实现思路对齐 **cherry-studio-backup-json-converter**（按助手分目录、补充 Metadata 键、兜底命名）。
@@ -242,16 +242,13 @@ rikka <INPUT> [-o <PATH>]
 
 ## 10. 技术选型
 
-- Rust 2024；包名 `rikkahub-db-converter`，bin 名 `rikka`。
-- 依赖：`anyhow`、`chrono`(clock)、`clap`(derive)、`rayon`、`serde`、`serde_json`、
+- Rust 2024；包名 `afterchat-rikka`，bin 名 `rikka`。
+- 依赖：`chatformat`、`anyhow`、`clap`(derive)、`rayon`、`serde`、`serde_json`、
   `zip` 2(deflate)、`rusqlite` 0.32(**bundled**)、`tempfile`。
 - 渲染用 `rayon` 并行；ZIP 串行写入。首次编译会编 bundled SQLite。
 
 ```
-rikkahub-db-converter/
-├── CHATFORMAT-CONVERTER.md
-├── SPEC.md
-├── README.md
+crates/rikka/
 ├── Cargo.toml
 ├── src/{main.rs, lib.rs}
 └── tests/integration_cli.rs

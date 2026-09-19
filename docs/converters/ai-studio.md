@@ -1,4 +1,6 @@
-# google-ai-studio-json-converter
+# ai-studio
+
+> 输出契约见 [`../CHATFORMAT.md`](../CHATFORMAT.md)。
 
 本工具用于解析包含与大语言模型（LLM）多轮对话（可能包含思考过程）的 JSON 文件，并将其转换为易于阅读的 Markdown 格式。
 

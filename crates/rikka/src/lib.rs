@@ -1,6 +1,6 @@
 //! 把 RikkaHub 的备份（内含 SQLite 数据库）转换为 AfterChat 对话 Markdown / ZIP。
 //!
-//! 输出契约见仓库根目录 `CHATFORMAT-CONVERTER.md`。
+//! 输出契约见仓库 `docs/CHATFORMAT.md`。
 //! 实现思路对齐 `cherry-studio-backup-json-converter`：按助手分目录、附加 Metadata 键、兜底命名。
 
 use std::collections::HashMap;

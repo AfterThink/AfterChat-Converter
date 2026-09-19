@@ -230,7 +230,7 @@ fn load_root(input_path: &Path) -> Result<Root> {
 //  渲染与打包
 // ═══════════════════════════════════════════════════════════
 
-/// 输出 zip 名前缀，遵循 docs/SPEC.md §9：`chat-export-{platform}-all-{timestamp}.zip`
+/// 输出 zip 名前缀，遵循 docs/CHATFORMAT.md §6：`chat-export-{platform}-all-{timestamp}.zip`
 const PLATFORM_ID: &str = "cherry";
 
 struct RenderContext<'a> {

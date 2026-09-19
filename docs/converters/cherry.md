@@ -1,4 +1,6 @@
-# Cherry Studio Backup JSON Converter
+# cherry
+
+> 输出契约见 [`../CHATFORMAT.md`](../CHATFORMAT.md)。
 
 这是一个用 Rust 编写的高效工具，用于将 Cherry Studio 的备份文件（JSON 或包含 `data.json` 的 ZIP）转换为易于阅读的 Markdown 文档。
 
@@ -13,7 +15,7 @@
 - **智能文件命名**：条目名为 `<助手名>/<YYYYMMDD-HHmmss>-<标题>.md`，自动处理非法字符（包括换行符）与重名。
 - **时间时光机**：每个条目的时间属性会被设为对话实际发生的时刻，方便按时间排序归档。
 - **思维链展示**：支持提取并格式化展示模型的思维链（Thought Process）。
-- **格式契约**：输出严格遵循 [`CHATFORMAT.md`](CHATFORMAT.md)（AfterChat 对话文件格式规范）。
+- **格式契约**：输出严格遵循 [`../CHATFORMAT.md`](../CHATFORMAT.md)（AfterChat 对话文件格式规范）。
 
 ## 🚀 快速开始
 
@@ -70,7 +72,7 @@ chat-export-cherry-all-1789794167679.zip
 └── export-failures.md          ← 仅当有主题没有任何消息时才出现
 ```
 
-- zip 名遵循 `docs/SPEC.md` §9：`chat-export-{platform}-all-{毫秒时间戳}.zip`
+- zip 名遵循 `docs/CHATFORMAT.md` §6：`chat-export-{platform}-all-{毫秒时间戳}.zip`
 - 条目名：`<助手名>/<YYYYMMDD-HHmmss>-<标题>.md`（时间取对话时间，包内从旧到新）
 - 重名自动加 `-2` / `-3`
 - 条目时间戳 = 对话实际时间（受 zip 格式限制，精度 **2 秒**）

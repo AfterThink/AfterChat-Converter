@@ -1,6 +1,6 @@
-# 规格说明（SPEC）
+# qwen
 
-> 目标契约见 [`CHATFORMAT.md`](./CHATFORMAT.md)。本文描述 `qwen` 工具的具体实现规格。
+> 目标契约见 [`../CHATFORMAT.md`](../CHATFORMAT.md)。本文描述 `qwen` 工具的具体实现规格。
 
 ## 1. 范围
 

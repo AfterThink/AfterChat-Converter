@@ -70,7 +70,7 @@
 
 ### 4.1 项目结构
 ```
-converter/gui/
+gui/
 ├── src/                # 前端源码 (HTML/JS/CSS)
 │   ├── index.html
 │   ├── main.js
