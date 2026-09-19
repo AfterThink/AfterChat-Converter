@@ -1,18 +1,17 @@
 use anyhow::{Context, Result, bail};
-use chrono::{DateTime, Datelike, FixedOffset, Local, TimeZone, Timelike};
+use chatformat::Message as ChatMessage;
+use chatformat::{
+    Conversation, ExportFailure, NameStyle, Role, UNKNOWN_MODEL, ZipExport, default_zip_name, time,
+};
 use clap::Parser;
 use rayon::prelude::*;
-use regex::Regex;
 use serde::Deserialize;
 use serde_json::Value;
-use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use zip::CompressionMethod;
 use zip::ZipArchive;
-use zip::write::{SimpleFileOptions, ZipWriter};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -130,20 +129,6 @@ struct TopicMetadata {
     created_at: Option<Value>,
 }
 
-fn sanitize_filename(filename: &str) -> String {
-    let re = Regex::new(r#"[\\/*?:"<>|\r\n]"#).unwrap();
-    re.replace_all(filename, "").to_string()
-}
-
-fn sanitize_path_component(name: &str, fallback: &str) -> String {
-    let sanitized = sanitize_filename(name).trim().to_string();
-    if sanitized.is_empty() || sanitized == "." || sanitized == ".." {
-        fallback.to_string()
-    } else {
-        sanitized
-    }
-}
-
 fn get_created_at_f64(v: &Option<Value>) -> f64 {
     match v {
         Some(Value::Number(n)) => n.as_f64().unwrap_or(0.0),
@@ -158,126 +143,9 @@ fn get_created_at_f64(v: &Option<Value>) -> f64 {
     }
 }
 
-/// 解析 cherry 的 `createdAt`（RFC3339 字符串 / epoch 秒或毫秒数字）
-fn parse_created_at_value(value: &Value) -> Option<DateTime<FixedOffset>> {
-    match value {
-        Value::String(text) => DateTime::parse_from_rfc3339(text.trim()).ok(),
-        Value::Number(number) => {
-            let raw = number.as_f64()?;
-            let secs = if raw.abs() >= 1e11 { raw / 1000.0 } else { raw };
-            Local
-                .timestamp_opt(secs as i64, 0)
-                .single()
-                .map(|dt| dt.fixed_offset())
-        }
-        _ => None,
-    }
-}
-
-/// `^#{1,6}\s+(.+)$`（多行）→ `**$1**`：不保留井号标题，但保留强调。
-///
-/// 1. **代码围栏内不动**（``` / ~~~），否则会把 Python / Shell 的 `# 注释` 误改成加粗。
-/// 2. **整条标题加粗**：标题内原有的 `**` 会被吸收。否则外层 `**` 与内层 `**` 同级交错，
-///    CommonMark 会错配定界符，导致整条标题强调不全、甚至残留可见的 `**`。
-///    但行内代码（`` ` ``）里的 `**` 不是强调（如 glob `**/*.js`），必须原样保留。
-fn strip_hashes(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut fence: Option<&'static str> = None;
-
-    for (idx, line) in text.split('\n').enumerate() {
-        if idx > 0 {
-            out.push('\n');
-        }
-
-        let trimmed = line.trim_start();
-        let marker = if trimmed.starts_with("```") {
-            Some("```")
-        } else if trimmed.starts_with("~~~") {
-            Some("~~~")
-        } else {
-            None
-        };
-
-        match fence {
-            Some(open) => {
-                out.push_str(line);
-                if marker == Some(open) {
-                    fence = None;
-                }
-            }
-            None => {
-                if let Some(open) = marker {
-                    fence = Some(open);
-                    out.push_str(line);
-                } else {
-                    out.push_str(&strip_hashes_line(line));
-                }
-            }
-        }
-    }
-
-    out
-}
-
-fn strip_hashes_line(line: &str) -> Cow<'_, str> {
-    let hashes = line.bytes().take_while(|b| *b == b'#').count();
-    if hashes == 0 || hashes > 6 {
-        return Cow::Borrowed(line);
-    }
-
-    let rest = &line[hashes..];
-    let trimmed = rest.trim_start_matches(char::is_whitespace);
-    if trimmed.len() == rest.len() || trimmed.is_empty() {
-        return Cow::Borrowed(line);
-    }
-
-    // 吸收标题内的 `**`，使整条标题落在一个加粗里（行内代码段除外）
-    let merged = remove_bold_outside_code(trimmed);
-    let inner = merged.trim();
-    if inner.is_empty() {
-        return Cow::Borrowed(line);
-    }
-
-    Cow::Owned(format!("**{inner}**"))
-}
-
-/// 去掉不在行内代码段里的 `**`。
-///
-/// 行内代码由反引号界定（CommonMark 的 code span 规则：N 个反引号开始，
-/// 同样 N 个反引号结束），其中的 `**` 属于代码内容（如 glob `**/*.js`），原样保留。
-fn remove_bold_outside_code(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = String::with_capacity(text.len());
-    let mut index = 0;
-    // 当前代码段的定界反引号个数；0 表示不在代码段内
-    let mut open_ticks = 0;
-
-    while index < bytes.len() {
-        if bytes[index] == b'`' {
-            let start = index;
-            while index < bytes.len() && bytes[index] == b'`' {
-                index += 1;
-            }
-            let run = index - start;
-            if open_ticks == 0 {
-                open_ticks = run;
-            } else if open_ticks == run {
-                open_ticks = 0;
-            }
-            out.push_str(&text[start..index]);
-        } else if open_ticks == 0 && bytes[index] == b'*' && bytes.get(index + 1) == Some(&b'*') {
-            index += 2;
-        } else {
-            let ch = text[index..]
-                .chars()
-                .next()
-                .expect("index is on a char boundary");
-            out.push(ch);
-            index += ch.len_utf8();
-        }
-    }
-
-    out
+/// 解析 cherry 的 `createdAt`（RFC3339 字符串 / epoch 秒或毫秒数字）→ epoch 秒
+fn parse_created_at_secs(value: &Value) -> Option<i64> {
+    time::value_to_secs_any(Some(value))
 }
 
 fn is_zip_input(path: &Path) -> bool {
@@ -363,26 +231,13 @@ fn load_root(input_path: &Path) -> Result<Root> {
 // ═══════════════════════════════════════════════════════════
 
 /// 输出 zip 名前缀，遵循 docs/SPEC.md §9：`chat-export-{platform}-all-{timestamp}.zip`
-const EXPORT_PREFIX: &str = "chat-export-cherry-all";
-/// zip 条目名里标题部分的最大字符数
-const ENTRY_TITLE_MAX: usize = 80;
+const PLATFORM_ID: &str = "cherry";
 
 struct RenderContext<'a> {
     assistants: &'a HashMap<String, AssistantInfo>,
     topic_metadata: &'a HashMap<String, TopicMetadata>,
     blocks: &'a HashMap<&'a String, &'a MessageBlock>,
     blocks_by_message_id: &'a HashMap<&'a String, Vec<&'a MessageBlock>>,
-}
-
-/// 一个待写入 zip 的对话
-struct RenderedTopic {
-    /// zip 内路径：`<助手名>/<YYYYMMDD-HHmmss>-<标题>.md`
-    entry_name: String,
-    markdown: String,
-    /// 对话时间（epoch 秒）→ 写进 zip 条目的修改时间
-    epoch: Option<i64>,
-    /// 排序键（毫秒）
-    sort_ms: Option<i64>,
 }
 
 /// 被跳过的主题（写进 zip 内的 `export-failures.md`）
@@ -393,40 +248,11 @@ struct TopicFailure {
 }
 
 enum TopicOutcome {
-    Rendered(Box<RenderedTopic>),
+    Rendered(Box<Conversation>),
     Skipped(TopicFailure),
 }
 
-fn format_local_compact(ms: i64) -> String {
-    Local
-        .timestamp_opt(ms / 1000, 0)
-        .single()
-        .map(|dt| dt.format("%Y%m%d-%H%M%S").to_string())
-        .unwrap_or_else(|| "00000000-000000".to_string())
-}
-
-/// epoch 秒 → zip 的 DOS 时间（本地时间，2 秒精度）
-fn zip_datetime(secs: i64) -> Option<zip::DateTime> {
-    let dt = Local.timestamp_opt(secs, 0).single()?;
-    zip::DateTime::from_date_and_time(
-        dt.year() as u16,
-        dt.month() as u8,
-        dt.day() as u8,
-        dt.hour() as u8,
-        dt.minute() as u8,
-        dt.second() as u8,
-    )
-    .ok()
-}
-
-fn truncate_chars(text: &str, max: usize) -> String {
-    if text.chars().count() <= max {
-        return text.to_string();
-    }
-    text.chars().take(max).collect()
-}
-
-/// 把单个主题渲染成契约格式的 Markdown，并算好它在 zip 里的路径与时间
+/// 把单个主题映射成 `chatformat::Conversation`（渲染 / 命名 / 打包交给公共库）
 fn render_topic(ctx: &RenderContext<'_>, topic: &Topic) -> TopicOutcome {
     let topic_id = topic.id.as_str();
     let meta = ctx.topic_metadata.get(topic_id);
@@ -436,24 +262,13 @@ fn render_topic(ctx: &RenderContext<'_>, topic: &Topic) -> TopicOutcome {
     let assistant_id = meta.map(|m| m.assistant_id.as_str()).unwrap_or("default");
 
     // 元数据里的时间优先，其次用 topic 自身的；两者都可能是字符串或数字
-    let created_at_dt = meta
+    let time_secs = meta
         .and_then(|m| m.created_at.as_ref())
-        .and_then(parse_created_at_value)
-        .or_else(|| topic.created_at.as_ref().and_then(parse_created_at_value));
-
-    // 契约 §2：`- **Time:** <time>`，与本项目其它转换器同一口径（本地时间）
-    let time_str = created_at_dt
-        .map(|dt| {
-            dt.with_timezone(&Local)
-                .format("%Y-%m-%d %H:%M:%S %:z")
-                .to_string()
-        })
-        .unwrap_or_else(|| "unknown".to_string());
+        .and_then(parse_created_at_secs)
+        .or_else(|| topic.created_at.as_ref().and_then(parse_created_at_secs));
 
     let assistant_info = ctx.assistants.get(assistant_id);
-    let assistant_name = assistant_info
-        .map(|a| a.name.as_str())
-        .unwrap_or("Assistant");
+    let assistant_name = assistant_info.map(|a| a.name.as_str()).unwrap_or("Assistant");
     let system_instruction = assistant_info.map(|a| a.prompt.as_str()).unwrap_or("");
 
     let mut topic_messages = topic.messages.iter().collect::<Vec<_>>();
@@ -471,12 +286,8 @@ fn render_topic(ctx: &RenderContext<'_>, topic: &Topic) -> TopicOutcome {
         ta.partial_cmp(&tb).unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    let mut md_content = String::new();
-    md_content.push_str("## Metadata\n\n");
-    md_content.push_str("### Run Settings\n\n");
-
-    // First model
-    let mut first_model = "Unknown".to_string();
+    // 第一条带 model 的助手消息 → Model（契约 §2 必须有 Model 键）
+    let mut first_model = UNKNOWN_MODEL.to_string();
     for m in &topic_messages {
         if m.role == "assistant"
             && let Some(model_info) = &m.model
@@ -492,195 +303,80 @@ fn render_topic(ctx: &RenderContext<'_>, topic: &Topic) -> TopicOutcome {
                 Value::String(s) => first_model = s.clone(),
                 _ => {}
             }
-            if first_model != "Unknown" {
+            if first_model != UNKNOWN_MODEL {
                 break;
             }
         }
     }
 
-    // 契约 §2 推荐的键排在前面，cherry 特有的键随后（附加键不违规）
-    md_content.push_str(&format!("- **Model:** `{first_model}`\n"));
-    md_content.push_str(&format!("- **Time:** {time_str}\n"));
-    md_content.push_str(&format!("- **Topic ID:** `{topic_id}`\n"));
-    md_content.push_str(&format!("- **Assistant:** `{assistant_name}`\n\n"));
-
-    md_content.push_str("## Conversation\n\n");
-
+    let mut messages: Vec<ChatMessage> = Vec::new();
     // 契约 §3：系统提示是对话的第一条消息
     if !system_instruction.trim().is_empty() {
-        md_content.push_str("### ⚙️ System\n\n");
-        md_content.push_str(&strip_hashes(system_instruction));
-        md_content.push_str("\n\n");
+        messages.push(ChatMessage::system(system_instruction));
     }
 
     for msg in &topic_messages {
-        let role = msg.role.as_str();
-
-        let mut msg_blocks_content: Vec<&MessageBlock> = Vec::new();
+        let mut blocks: Vec<&MessageBlock> = Vec::new();
         for bid in &msg.blocks {
             if let Some(block) = ctx.blocks.get(bid) {
-                msg_blocks_content.push(block);
+                blocks.push(block);
             }
         }
-
-        if msg_blocks_content.is_empty()
-            && let Some(blocks) = ctx.blocks_by_message_id.get(&msg.id)
+        if blocks.is_empty()
+            && let Some(by_message) = ctx.blocks_by_message_id.get(&msg.id)
         {
-            msg_blocks_content.extend(blocks);
+            blocks.extend(by_message.iter().copied());
         }
-
-        // Sort blocks
-        msg_blocks_content.sort_by(|a, b| {
+        blocks.sort_by(|a, b| {
             let ta = get_created_at_f64(&a.created_at);
             let tb = get_created_at_f64(&b.created_at);
             ta.partial_cmp(&tb).unwrap_or(std::cmp::Ordering::Equal)
         });
 
-        // 契约 §3：把助手消息拆成「思考」与「回复」两段，各只出一个标题
-        let mut thoughts: Vec<&str> = Vec::new();
-        let mut responses: Vec<&str> = Vec::new();
-        for block in &msg_blocks_content {
-            if block.content.trim().is_empty() {
+        // 契约 §3：助手消息拆成「思考」与「回复」；其它块类型算正文
+        let mut thinking = Vec::new();
+        let mut body = Vec::new();
+        for block in blocks {
+            let content = block.content.trim();
+            if content.is_empty() {
                 continue;
             }
             if block.type_ == "thinking" {
-                thoughts.push(block.content.as_str());
+                thinking.push(content.to_string());
             } else {
-                responses.push(block.content.as_str());
+                body.push(content.to_string());
             }
         }
-
-        if thoughts.is_empty() && responses.is_empty() {
+        if thinking.is_empty() && body.is_empty() {
             continue;
         }
 
-        let header = match role {
-            "user" => "### 🧑‍💻 User",
-            "system" => "### ⚙️ System",
-            _ => "### 🤖 Assistant",
+        let role = match msg.role.as_str() {
+            "user" => Role::User,
+            "system" => Role::System,
+            _ => Role::Assistant,
         };
-        md_content.push_str(header);
-        md_content.push_str("\n\n");
-
-        if !thoughts.is_empty() {
-            md_content.push_str("#### 🤔 Thought Process\n\n");
-            md_content.push_str(&strip_hashes(&thoughts.join("\n\n")));
-            md_content.push_str("\n\n");
-            if role != "user" && !responses.is_empty() {
-                md_content.push_str("#### 💡 Response\n\n");
-            }
-        }
-
-        if !responses.is_empty() {
-            md_content.push_str(&strip_hashes(&responses.join("\n\n")));
-            md_content.push_str("\n\n");
-        }
+        messages.push(ChatMessage {
+            role,
+            thinking,
+            body,
+        });
     }
 
-    let mut safe_name = sanitize_filename(&topic_name);
-    if safe_name.trim().is_empty() {
-        safe_name = "Untitled_Conversation".to_string();
-    }
-    let prefix = created_at_dt
-        .map(|dt| format_local_compact(dt.timestamp_millis()))
-        .unwrap_or_else(|| "00000000-000000".to_string());
-
-    TopicOutcome::Rendered(Box::new(RenderedTopic {
-        entry_name: format!(
-            "{}/{}-{}.md",
-            sanitize_path_component(assistant_name, "Assistant"),
-            prefix,
-            truncate_chars(safe_name.trim(), ENTRY_TITLE_MAX)
-        ),
-        markdown: md_content,
-        epoch: created_at_dt.map(|dt| dt.timestamp()),
-        sort_ms: created_at_dt.map(|dt| dt.timestamp_millis()),
+    TopicOutcome::Rendered(Box::new(Conversation {
+        title: topic_name,
+        model: first_model,
+        time_secs,
+        sort_ms: time_secs.map(|secs| secs * 1000),
+        url: None,
+        extra: vec![
+            chatformat::MetadataLine::code("Topic ID", topic_id),
+            chatformat::MetadataLine::code("Assistant", assistant_name),
+        ],
+        group: Some(assistant_name.to_string()),
+        id: Some(topic_id.to_string()),
+        messages,
     }))
-}
-
-/// 同一条目名重复时追加 `-2` / `-3`（扩展名保持在末尾）
-fn unique_entry_name(name: &str, used: &mut HashSet<String>) -> String {
-    if used.insert(name.to_string()) {
-        return name.to_string();
-    }
-
-    let (stem, ext) = match name.rsplit_once('.') {
-        Some((stem, ext)) => (stem.to_string(), format!(".{ext}")),
-        None => (name.to_string(), String::new()),
-    };
-
-    let mut counter = 2;
-    loop {
-        let candidate = format!("{stem}-{counter}{ext}");
-        if used.insert(candidate.clone()) {
-            return candidate;
-        }
-        counter += 1;
-    }
-}
-
-fn build_failure_markdown(source: &Path, failures: &[TopicFailure]) -> String {
-    let mut lines: Vec<String> = Vec::new();
-    lines.push("# Export Failures".to_string());
-    lines.push(String::new());
-    lines.push("## Metadata".to_string());
-    lines.push(String::new());
-    lines.push("- **Platform:** `cherry-studio`".to_string());
-    lines.push(format!("- **Source:** `{}`", source.display()));
-    lines.push(format!("- **Skipped:** {}", failures.len()));
-    lines.push(String::new());
-    lines.push("这些主题没有任何可导出的消息，因此未生成 Markdown。".to_string());
-    lines.push(String::new());
-
-    for (index, failure) in failures.iter().enumerate() {
-        lines.push(format!("## {}. {}", index + 1, failure.title));
-        lines.push(String::new());
-        lines.push(format!("- **Topic ID:** `{}`", failure.id));
-        lines.push(format!("- **Reason:** {}", failure.reason));
-        lines.push(String::new());
-    }
-
-    lines.join("\n")
-}
-
-fn write_zip_export(
-    source: &Path,
-    topics: &[RenderedTopic],
-    failures: &[TopicFailure],
-    zip_path: &Path,
-) -> Result<()> {
-    let file =
-        File::create(zip_path).with_context(|| format!("创建压缩包失败 {}", zip_path.display()))?;
-    let mut zip = ZipWriter::new(file);
-    let base = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
-
-    for topic in topics {
-        let options = match topic.epoch.and_then(zip_datetime) {
-            Some(datetime) => base.last_modified_time(datetime),
-            None => base,
-        };
-        zip.start_file(topic.entry_name.clone(), options)
-            .with_context(|| format!("写入 {} 失败", topic.entry_name))?;
-        zip.write_all(topic.markdown.as_bytes())
-            .with_context(|| format!("写入 {} 失败", topic.entry_name))?;
-    }
-
-    if !failures.is_empty() {
-        let report = build_failure_markdown(source, failures);
-        // 失败报告是「刚生成的」，不是某个对话，用当前时间（不设的话会退成 1980-01-01）
-        let options = zip_datetime(Local::now().timestamp())
-            .map(|datetime| base.last_modified_time(datetime))
-            .unwrap_or(base);
-        zip.start_file("export-failures.md", options)
-            .context("写入 export-failures.md 失败")?;
-        zip.write_all(report.as_bytes())
-            .context("写入 export-failures.md 失败")?;
-    }
-
-    zip.finish()
-        .with_context(|| format!("收尾压缩包失败 {}", zip_path.display()))?;
-
-    Ok(())
 }
 
 fn is_output_file(path: &Path) -> bool {
@@ -789,35 +485,24 @@ fn main() -> Result<()> {
 
     let outcomes: Vec<TopicOutcome> = topics.par_iter().map(|t| render_topic(&ctx, t)).collect();
 
-    let mut rendered: Vec<RenderedTopic> = Vec::new();
-    let mut failures: Vec<TopicFailure> = Vec::new();
+    let mut conversations: Vec<Conversation> = Vec::new();
+    let mut failures: Vec<ExportFailure> = Vec::new();
     for outcome in outcomes {
         match outcome {
-            TopicOutcome::Rendered(topic) => rendered.push(*topic),
-            TopicOutcome::Skipped(failure) => failures.push(failure),
+            TopicOutcome::Rendered(conversation) => conversations.push(*conversation),
+            TopicOutcome::Skipped(failure) => failures.push(ExportFailure {
+                title: failure.title,
+                id: failure.id,
+                reason: failure.reason,
+            }),
         }
     }
 
-    // zip 内按对话时间从旧到新
-    rendered.sort_by(|a, b| match (a.sort_ms, b.sort_ms) {
-        (None, None) => a.entry_name.cmp(&b.entry_name),
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (Some(left), Some(right)) => left
-            .cmp(&right)
-            .then_with(|| a.entry_name.cmp(&b.entry_name)),
-    });
-
-    let mut used_names: HashSet<String> = HashSet::new();
-    for topic in &mut rendered {
-        topic.entry_name = unique_entry_name(&topic.entry_name, &mut used_names);
-    }
-
-    let zip_name = format!(
-        "{EXPORT_PREFIX}-{}.zip",
-        chrono::Utc::now().timestamp_millis()
-    );
-    let target = resolve_zip_target(&input_path, args.output.as_deref(), zip_name)?;
+    let target = resolve_zip_target(
+        &input_path,
+        args.output.as_deref(),
+        default_zip_name(PLATFORM_ID),
+    )?;
 
     if let Some(parent) = target.parent()
         && !parent.as_os_str().is_empty()
@@ -826,9 +511,17 @@ fn main() -> Result<()> {
             .with_context(|| format!("创建输出目录失败 {}", parent.display()))?;
     }
 
-    write_zip_export(&input_path, &rendered, &failures, &target)?;
+    chatformat::write_zip(&ZipExport {
+        platform: PLATFORM_ID,
+        conversations: &conversations,
+        failures: &failures,
+        output: &target,
+        source: Some(&input_path),
+        name_style: NameStyle::Spec,
+        show_progress: false,
+    })?;
 
-    println!("已打包 {} 个对话 → {}", rendered.len(), target.display());
+    println!("已打包 {} 个对话 → {}", conversations.len(), target.display());
     if !failures.is_empty() {
         println!(
             "跳过 {} 个空主题（详见压缩包内 export-failures.md）",
@@ -844,94 +537,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn headings_become_bold() {
-        assert_eq!(strip_hashes("# Title"), "**Title**");
-        assert_eq!(strip_hashes("### Deep"), "**Deep**");
-        assert_eq!(strip_hashes("####### too many"), "####### too many");
-        assert_eq!(strip_hashes("#nospace"), "#nospace");
-        assert_eq!(strip_hashes("plain\ntext"), "plain\ntext");
-        assert_eq!(strip_hashes("a\n## b\nc"), "a\n**b**\nc");
-    }
-
-    /// 整条标题必须落在一个加粗里：外层一对 `**` 之内不得再出现 `**`，
-    /// 否则 CommonMark 会错配定界符（表现为只有某个词被强调，或残留可见星号）。
-    #[test]
-    fn heading_is_bold_as_a_whole() {
-        for (input, expected) in [
-            ("# 1. **多分辨率策略不能丢**", "**1. 多分辨率策略不能丢**"),
-            (
-                "## 方案一：**“水珠”——像吃水果**",
-                "**方案一：“水珠”——像吃水果**",
-            ),
-            ("# 🌅 **早晨的第一瞬间**", "**🌅 早晨的第一瞬间**"),
-            ("# 1. **A** 2. **B**", "**1. A 2. B**"),
-            ("# **Bold**", "**Bold**"),
-        ] {
-            let out = strip_hashes(input);
-            assert_eq!(out, expected, "input: {input}");
-            let inner = &out[2..out.len() - 2];
-            assert!(!inner.contains("**"), "内层仍有 **（未整条加粗）: {out}");
-        }
-    }
-
-    #[test]
-    fn heading_keeps_bold_inside_inline_code() {
-        // glob 里的 `**` 不是强调，不能当成内层加粗吸收掉
-        assert_eq!(
-            strip_hashes("# 匹配 `**/*.js` 的路径"),
-            "**匹配 `**/*.js` 的路径**"
-        );
-        assert_eq!(strip_hashes("# a ``**x**`` b"), "**a ``**x**`` b**");
-    }
-
-    #[test]
-    fn code_fences_are_untouched() {
-        // 否则 Python / Shell 的 `# 注释` 会被误改成加粗
-        for input in [
-            "```python\n# comment\n```",
-            "~~~bash\n# comment\n~~~",
-            "# before\n```\n# inside\n```\n# after",
-        ] {
-            assert_eq!(
-                strip_hashes(input),
-                input
-                    .replace("# before", "**before**")
-                    .replace("# after", "**after**")
-            );
-        }
-    }
-
-    #[test]
-    fn duplicate_entry_names_get_suffix() {
-        let mut used = HashSet::new();
-        let name = "A/20240101-000000-T.md";
-        assert_eq!(unique_entry_name(name, &mut used), name);
-        assert_eq!(
-            unique_entry_name(name, &mut used),
-            "A/20240101-000000-T-2.md"
-        );
-        assert_eq!(
-            unique_entry_name(name, &mut used),
-            "A/20240101-000000-T-3.md"
-        );
-        // 不同助手目录下同名互不影响
-        assert_eq!(
-            unique_entry_name("B/20240101-000000-T.md", &mut used),
-            "B/20240101-000000-T.md"
-        );
-    }
-
-    #[test]
     fn created_at_parses_rfc3339_and_epoch() {
-        let iso = parse_created_at_value(&serde_json::json!("2024-03-28T13:31:51.887Z"));
-        assert_eq!(iso.map(|dt| dt.timestamp()), Some(1711632711));
+        let iso = parse_created_at_secs(&serde_json::json!("2024-03-28T13:31:51.887Z"));
+        assert_eq!(iso, Some(1711632711));
 
-        let secs = parse_created_at_value(&serde_json::json!(1761203267));
-        let millis = parse_created_at_value(&serde_json::json!(1761203267000i64));
-        assert_eq!(secs.map(|dt| dt.timestamp()), Some(1761203267));
-        assert_eq!(millis.map(|dt| dt.timestamp()), Some(1761203267));
+        let secs = parse_created_at_secs(&serde_json::json!(1761203267));
+        let millis = parse_created_at_secs(&serde_json::json!(1761203267000i64));
+        assert_eq!(secs, Some(1761203267));
+        assert_eq!(millis, Some(1761203267));
 
-        assert!(parse_created_at_value(&serde_json::json!(null)).is_none());
-        assert!(parse_created_at_value(&serde_json::json!("not a date")).is_none());
+        assert_eq!(parse_created_at_secs(&serde_json::json!(null)), None);
+        assert_eq!(parse_created_at_secs(&serde_json::json!("not a date")), None);
     }
 }
