@@ -3,33 +3,24 @@
 //! 输出契约见仓库根目录 `CHATFORMAT-CONVERTER.md`。
 //! 实现思路对齐 `cherry-studio-backup-json-converter`：按助手分目录、附加 Metadata 键、兜底命名。
 
-use std::borrow::Cow;
-use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use chrono::{Datelike, Local, TimeZone, Timelike};
+use chatformat::{
+    Conversation as ChatConversation, ExportFailure, Message as ChatMessage, MetadataLine,
+    NameStyle, Role, ZipExport, default_zip_name,
+};
 use rayon::prelude::*;
 use rusqlite::Connection;
 use serde::Deserialize;
 use tempfile::TempDir;
-use zip::CompressionMethod;
 use zip::ZipArchive;
-use zip::write::{SimpleFileOptions, ZipWriter};
 
-/// 输出 zip 名前缀：`chat-export-rikka-all-{毫秒时间戳}.zip`
-const EXPORT_PREFIX: &str = "chat-export-rikka-all";
 /// 失败报告里的平台标识
 const PLATFORM_ID: &str = "rikka";
-/// zip 条目名里标题部分的最大字符数
-const ENTRY_TITLE_MAX: usize = 80;
-/// 标题为空时的兜底名
-const DEFAULT_TITLE: &str = "Untitled_Conversation";
-/// 助手名 / 分组目录为空时的兜底名
-const DEFAULT_ASSISTANT: &str = "Assistant";
 
 // ═══════════════════════════════════════════════════════════
 //  对外 API
@@ -77,36 +68,21 @@ pub fn run_conversion(options: ConvertOptions) -> Result<RunSummary> {
         .map(|conversation| render_conversation(conversation, &settings))
         .collect();
 
-    let mut rendered: Vec<RenderedConversation> = Vec::new();
-    let mut failures: Vec<ConversationFailure> = Vec::new();
+    let mut conversations: Vec<ChatConversation> = Vec::new();
+    let mut failures: Vec<ExportFailure> = Vec::new();
     for outcome in outcomes {
         match outcome {
-            Outcome::Rendered(conversation) => rendered.push(*conversation),
-            Outcome::Failed(failure) => failures.push(failure),
+            Outcome::Rendered(conversation) => conversations.push(*conversation),
+            Outcome::Failed(failure) => failures.push(ExportFailure {
+                title: failure.title,
+                id: failure.id,
+                reason: failure.reason,
+            }),
         }
     }
 
-    // 包内按对话时间从新到旧（qwen 口径）；无时间的垫底
-    rendered.sort_by(|a, b| match (a.sort_ms, b.sort_ms) {
-        (None, None) => a.entry_name.cmp(&b.entry_name),
-        (None, Some(_)) => Ordering::Greater,
-        (Some(_), None) => Ordering::Less,
-        (Some(left), Some(right)) => right
-            .cmp(&left)
-            .then_with(|| a.entry_name.cmp(&b.entry_name)),
-    });
-
-    // 重名追加 -2 / -3
-    let mut used_names: HashSet<String> = HashSet::new();
-    for conversation in &mut rendered {
-        conversation.entry_name = unique_entry_name(&conversation.entry_name, &mut used_names);
-    }
-
-    let zip_name = format!(
-        "{EXPORT_PREFIX}-{}.zip",
-        chrono::Utc::now().timestamp_millis()
-    );
-    let target = resolve_zip_target(input, options.output.as_deref(), zip_name)?;
+    let target =
+        resolve_zip_target(input, options.output.as_deref(), default_zip_name(PLATFORM_ID))?;
     if let Some(parent) = target.parent()
         && !parent.as_os_str().is_empty()
     {
@@ -114,11 +90,19 @@ pub fn run_conversion(options: ConvertOptions) -> Result<RunSummary> {
             .with_context(|| format!("创建输出目录失败 {}", parent.display()))?;
     }
 
-    write_zip_export(input, &rendered, &failures, &target)?;
+    chatformat::write_zip(&ZipExport {
+        platform: PLATFORM_ID,
+        conversations: &conversations,
+        failures: &failures,
+        output: &target,
+        source: Some(input),
+        name_style: NameStyle::Spec,
+        show_progress: true,
+    })?;
 
     Ok(RunSummary {
         output: target,
-        exported: rendered.len(),
+        exported: conversations.len(),
         skipped: failures.len(),
     })
 }
@@ -564,16 +548,6 @@ fn pick_message(mut list: Vec<RawMessage>, select_index: i64) -> Option<RawMessa
 //  渲染
 // ═══════════════════════════════════════════════════════════
 
-struct RenderedConversation {
-    /// zip 内路径：`<助手名>/<YYYYMMDD-HHmmss>-<标题>.md`
-    entry_name: String,
-    markdown: String,
-    /// 排序键（毫秒）
-    sort_ms: Option<i64>,
-    /// zip 条目修改时间（epoch 秒）
-    epoch_secs: Option<i64>,
-}
-
 struct ConversationFailure {
     id: String,
     title: String,
@@ -581,7 +555,7 @@ struct ConversationFailure {
 }
 
 enum Outcome {
-    Rendered(Box<RenderedConversation>),
+    Rendered(Box<ChatConversation>),
     Failed(ConversationFailure),
 }
 
@@ -595,54 +569,35 @@ fn render_conversation(conversation: &Conversation, settings: &SettingsIndex) ->
     }
 
     let assistant = settings.assistants.get(&conversation.assistant_id);
-    let assistant_name = non_empty(&assistant.map(|a| a.name.as_str()).unwrap_or_default())
-        .unwrap_or(DEFAULT_ASSISTANT);
+    let assistant_name =
+        non_empty(&assistant.map(|a| a.name.as_str()).unwrap_or_default()).unwrap_or("Assistant");
     let system_prompt = effective_system_prompt(conversation, assistant);
     let model = resolve_model(conversation, settings);
-    let time_str = conversation
-        .create_at_ms
-        .map(format_local_time_ms)
-        .unwrap_or_else(|| "unknown".to_string());
 
-    let mut markdown = String::new();
-    markdown.push_str("## Metadata\n\n");
-    markdown.push_str(&format!("- **Model:** `{model}`\n"));
-    markdown.push_str(&format!("- **Time:** {time_str}\n"));
-    markdown.push_str(&format!("- **Conversation ID:** `{}`\n", conversation.id));
-    markdown.push_str(&format!("- **Assistant:** `{assistant_name}`\n\n"));
-    markdown.push_str("## Conversation\n\n");
-
-    // 契约：System 提示是对话的第一条消息
+    let mut messages: Vec<ChatMessage> = Vec::new();
+    // 契约 §3：系统提示是对话的第一条消息
     if !system_prompt.trim().is_empty() {
-        markdown.push_str("### ⚙️ System\n\n");
-        markdown.push_str(&strip_hashes(&system_prompt));
-        markdown.push_str("\n\n");
+        messages.push(ChatMessage::system(system_prompt.trim()));
     }
-
     for message in &conversation.messages {
-        render_message(&mut markdown, message);
+        if let Some(rendered) = render_message(message) {
+            messages.push(rendered);
+        }
     }
 
-    let safe_title = {
-        let sanitized = sanitize_filename(&conversation.title);
-        let sanitized = if sanitized.is_empty() {
-            DEFAULT_TITLE.to_string()
-        } else {
-            sanitized
-        };
-        truncate_chars(&sanitized, ENTRY_TITLE_MAX)
-    };
-    let prefix = conversation
-        .create_at_ms
-        .map(format_local_compact_ms)
-        .unwrap_or_else(|| "00000000-000000".to_string());
-    let directory = sanitize_path_component(assistant_name, DEFAULT_ASSISTANT);
-
-    Outcome::Rendered(Box::new(RenderedConversation {
-        entry_name: format!("{directory}/{prefix}-{safe_title}.md"),
-        markdown,
+    Outcome::Rendered(Box::new(ChatConversation {
+        title: conversation.title.clone(),
+        model,
+        time_secs: conversation.create_at_ms.map(|ms| ms / 1000),
         sort_ms: conversation.create_at_ms,
-        epoch_secs: conversation.create_at_ms.map(|ms| ms / 1000),
+        url: None,
+        extra: vec![
+            MetadataLine::code("Conversation ID", conversation.id.clone()),
+            MetadataLine::code("Assistant", assistant_name),
+        ],
+        group: Some(assistant_name.to_string()),
+        id: Some(conversation.id.clone()),
+        messages,
     }))
 }
 
@@ -683,9 +638,9 @@ fn resolve_model(conversation: &Conversation, settings: &SettingsIndex) -> Strin
     "Unknown".to_string()
 }
 
-fn render_message(markdown: &mut String, message: &RawMessage) {
-    let mut thoughts: Vec<String> = Vec::new();
-    let mut responses: Vec<String> = Vec::new();
+fn render_message(message: &RawMessage) -> Option<ChatMessage> {
+    let mut thinking: Vec<String> = Vec::new();
+    let mut body: Vec<String> = Vec::new();
 
     for part in &message.parts {
         match part.kind.as_str() {
@@ -693,21 +648,21 @@ fn render_message(markdown: &mut String, message: &RawMessage) {
                 if let Some(text) = &part.reasoning
                     && !text.trim().is_empty()
                 {
-                    thoughts.push(text.clone());
+                    thinking.push(text.clone());
                 }
             }
             "text" => {
                 if let Some(text) = &part.text
                     && !text.trim().is_empty()
                 {
-                    responses.push(text.clone());
+                    body.push(text.clone());
                 }
             }
-            "image" => push_media(&mut responses, "image", part, None),
-            "video" => push_media(&mut responses, "video", part, None),
-            "audio" => push_media(&mut responses, "audio", part, None),
+            "image" => push_media(&mut body, "image", part, None),
+            "video" => push_media(&mut body, "video", part, None),
+            "audio" => push_media(&mut body, "audio", part, None),
             "document" => push_media(
-                &mut responses,
+                &mut body,
                 "document",
                 part,
                 Some(part.file_name.as_deref().unwrap_or_default()),
@@ -717,32 +672,21 @@ fn render_message(markdown: &mut String, message: &RawMessage) {
         }
     }
 
-    if thoughts.is_empty() && responses.is_empty() {
-        return;
+    if thinking.is_empty() && body.is_empty() {
+        return None;
     }
 
-    let role = message.role.as_deref().unwrap_or_default();
-    let header = match role {
-        "user" => "### 🧑‍💻 User",
-        "system" => "### ⚙️ System",
-        _ => "### 🤖 Assistant",
+    // 无法识别的角色按契约 §4.2 兜底成 Assistant
+    let role = match message.role.as_deref() {
+        Some("user") => Role::User,
+        Some("system") => Role::System,
+        _ => Role::Assistant,
     };
-    markdown.push_str(header);
-    markdown.push_str("\n\n");
-
-    if !thoughts.is_empty() {
-        markdown.push_str("#### 🤔 Thought Process\n\n");
-        markdown.push_str(&strip_hashes(&thoughts.join("\n\n")));
-        markdown.push_str("\n\n");
-        if role != "user" && !responses.is_empty() {
-            markdown.push_str("#### 💡 Response\n\n");
-        }
-    }
-
-    if !responses.is_empty() {
-        markdown.push_str(&strip_hashes(&responses.join("\n\n")));
-        markdown.push_str("\n\n");
-    }
+    Some(ChatMessage {
+        role,
+        thinking,
+        body,
+    })
 }
 
 fn push_media(out: &mut Vec<String>, kind: &str, part: &Part, file_name: Option<&str>) {
@@ -762,112 +706,6 @@ fn push_media(out: &mut Vec<String>, kind: &str, part: &Part, file_name: Option<
 }
 
 // ═══════════════════════════════════════════════════════════
-//  文本处理（契约 §5）
-// ═══════════════════════════════════════════════════════════
-
-/// `^#{1,6}\s+(.+)$`（多行）→ `**$1**`：不保留井号标题，但保留强调。
-///
-/// 1. **代码围栏内不动**（``` / ~~~），否则会把 Python / Shell 的 `# 注释` 误改成加粗。
-/// 2. **整条标题加粗**：标题内原有的 `**` 会被吸收，避免同级定界符交错（渲染出可见星号）。
-///    但行内代码（`` ` ``）里的 `**` 不是强调（如 glob `**/*.js`），必须保留。
-fn strip_hashes(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut fence: Option<&'static str> = None;
-
-    for (index, line) in text.split('\n').enumerate() {
-        if index > 0 {
-            out.push('\n');
-        }
-
-        let trimmed = line.trim_start();
-        let marker = if trimmed.starts_with("```") {
-            Some("```")
-        } else if trimmed.starts_with("~~~") {
-            Some("~~~")
-        } else {
-            None
-        };
-
-        match fence {
-            Some(open) => {
-                out.push_str(line);
-                if marker == Some(open) {
-                    fence = None;
-                }
-            }
-            None => {
-                if let Some(open) = marker {
-                    fence = Some(open);
-                    out.push_str(line);
-                } else {
-                    out.push_str(&strip_hashes_line(line));
-                }
-            }
-        }
-    }
-
-    out
-}
-
-fn strip_hashes_line(line: &str) -> Cow<'_, str> {
-    let hashes = line.bytes().take_while(|byte| *byte == b'#').count();
-    if hashes == 0 || hashes > 6 {
-        return Cow::Borrowed(line);
-    }
-
-    let rest = &line[hashes..];
-    let trimmed = rest.trim_start_matches(char::is_whitespace);
-    if trimmed.len() == rest.len() || trimmed.is_empty() {
-        return Cow::Borrowed(line);
-    }
-
-    let merged = remove_bold_outside_code(trimmed);
-    let inner = merged.trim();
-    if inner.is_empty() {
-        return Cow::Borrowed(line);
-    }
-
-    Cow::Owned(format!("**{inner}**"))
-}
-
-/// 去掉不在行内代码段里的 `**`。
-///
-/// 行内代码由反引号界定（CommonMark：N 个反引号开始、同样 N 个结束），其中的 `**` 属于代码内容。
-fn remove_bold_outside_code(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = String::with_capacity(text.len());
-    let mut index = 0;
-    let mut open_ticks = 0;
-
-    while index < bytes.len() {
-        if bytes[index] == b'`' {
-            let start = index;
-            while index < bytes.len() && bytes[index] == b'`' {
-                index += 1;
-            }
-            let run = index - start;
-            if open_ticks == 0 {
-                open_ticks = run;
-            } else if open_ticks == run {
-                open_ticks = 0;
-            }
-            out.push_str(&text[start..index]);
-        } else if open_ticks == 0 && bytes[index] == b'*' && bytes.get(index + 1) == Some(&b'*') {
-            index += 2;
-        } else {
-            let ch = text[index..]
-                .chars()
-                .next()
-                .expect("index is on a char boundary");
-            out.push(ch);
-            index += ch.len_utf8();
-        }
-    }
-
-    out
-}
-
-// ═══════════════════════════════════════════════════════════
 //  命名 / 时间
 // ═══════════════════════════════════════════════════════════
 
@@ -881,69 +719,7 @@ fn non_empty(value: &str) -> Option<&str> {
 }
 
 fn display_title(title: &str) -> String {
-    let sanitized = sanitize_filename(title);
-    if sanitized.is_empty() {
-        DEFAULT_TITLE.to_string()
-    } else {
-        truncate_chars(&sanitized, ENTRY_TITLE_MAX)
-    }
-}
-
-/// 删除 Windows 非法字符与换行（对齐 cherry：删除而非替换）。
-fn sanitize_filename(name: &str) -> String {
-    name.chars()
-        .filter(|ch| {
-            !matches!(
-                ch,
-                '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|' | '\r' | '\n' | '\t'
-            )
-        })
-        .collect::<String>()
-        .trim()
-        .to_string()
-}
-
-fn sanitize_path_component(name: &str, fallback: &str) -> String {
-    let sanitized = sanitize_filename(name);
-    if sanitized.is_empty() || sanitized == "." || sanitized == ".." {
-        fallback.to_string()
-    } else {
-        sanitized
-    }
-}
-
-fn truncate_chars(text: &str, max: usize) -> String {
-    text.chars().take(max).collect()
-}
-
-fn format_local_time_ms(ms: i64) -> String {
-    Local
-        .timestamp_millis_opt(ms)
-        .single()
-        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S %:z").to_string())
-        .unwrap_or_else(|| "unknown".to_string())
-}
-
-fn format_local_compact_ms(ms: i64) -> String {
-    Local
-        .timestamp_millis_opt(ms)
-        .single()
-        .map(|dt| dt.format("%Y%m%d-%H%M%S").to_string())
-        .unwrap_or_else(|| "00000000-000000".to_string())
-}
-
-/// epoch 秒 → zip DOS 时间（本地时间，2 秒精度）
-fn zip_datetime(secs: i64) -> Option<zip::DateTime> {
-    let dt = Local.timestamp_opt(secs, 0).single()?;
-    zip::DateTime::from_date_and_time(
-        dt.year() as u16,
-        dt.month() as u8,
-        dt.day() as u8,
-        dt.hour() as u8,
-        dt.minute() as u8,
-        dt.second() as u8,
-    )
-    .ok()
+    chatformat::sanitize_filename_with(title, 100, "Untitled_Conversation")
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -974,91 +750,6 @@ fn resolve_zip_target(input: &Path, output: Option<&Path>, zip_name: String) -> 
     }
 }
 
-/// 同一条目名重复时追加 `-2` / `-3`（扩展名保持在末尾）
-fn unique_entry_name(name: &str, used: &mut HashSet<String>) -> String {
-    if used.insert(name.to_string()) {
-        return name.to_string();
-    }
-
-    let (stem, extension) = match name.rsplit_once('.') {
-        Some((stem, extension)) => (stem.to_string(), format!(".{extension}")),
-        None => (name.to_string(), String::new()),
-    };
-
-    let mut counter = 2;
-    loop {
-        let candidate = format!("{stem}-{counter}{extension}");
-        if used.insert(candidate.clone()) {
-            return candidate;
-        }
-        counter += 1;
-    }
-}
-
-fn build_failure_markdown(source: &Path, failures: &[ConversationFailure]) -> String {
-    let mut lines: Vec<String> = Vec::new();
-    lines.push("# Export Failures".to_string());
-    lines.push(String::new());
-    lines.push("## Metadata".to_string());
-    lines.push(String::new());
-    lines.push(format!("- **Platform:** `{PLATFORM_ID}`"));
-    lines.push(format!("- **Source:** `{}`", source.display()));
-    lines.push(format!("- **Skipped:** {}", failures.len()));
-    lines.push(String::new());
-    lines.push("这些对话没有任何可导出的消息，因此未生成 Markdown。".to_string());
-    lines.push(String::new());
-
-    for (index, failure) in failures.iter().enumerate() {
-        lines.push(format!("## {}. {}", index + 1, failure.title));
-        lines.push(String::new());
-        lines.push(format!("- **Conversation ID:** `{}`", failure.id));
-        lines.push(format!("- **Reason:** {}", failure.reason));
-        lines.push(String::new());
-    }
-
-    lines.join("\n")
-}
-
-fn write_zip_export(
-    source: &Path,
-    conversations: &[RenderedConversation],
-    failures: &[ConversationFailure],
-    zip_path: &Path,
-) -> Result<()> {
-    let file =
-        File::create(zip_path).with_context(|| format!("创建压缩包失败 {}", zip_path.display()))?;
-    let mut zip = ZipWriter::new(file);
-    let base = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
-
-    for conversation in conversations {
-        let options = match conversation.epoch_secs.and_then(zip_datetime) {
-            Some(datetime) => base.last_modified_time(datetime),
-            None => base,
-        };
-        zip.start_file(conversation.entry_name.clone(), options)
-            .with_context(|| format!("写入 {} 失败", conversation.entry_name))?;
-        zip.write_all(conversation.markdown.as_bytes())
-            .with_context(|| format!("写入 {} 失败", conversation.entry_name))?;
-    }
-
-    if !failures.is_empty() {
-        let report = build_failure_markdown(source, failures);
-        // 失败报告是「刚生成的」，用当前时间（不设的话会退成 1980-01-01）
-        let options = zip_datetime(Local::now().timestamp())
-            .map(|datetime| base.last_modified_time(datetime))
-            .unwrap_or(base);
-        zip.start_file("export-failures.md", options)
-            .context("写入 export-failures.md 失败")?;
-        zip.write_all(report.as_bytes())
-            .context("写入 export-failures.md 失败")?;
-    }
-
-    zip.finish()
-        .with_context(|| format!("收尾压缩包失败 {}", zip_path.display()))?;
-
-    Ok(())
-}
-
 // ═══════════════════════════════════════════════════════════
 //  测试
 // ═══════════════════════════════════════════════════════════
@@ -1069,82 +760,6 @@ mod tests {
 
     fn message(value: serde_json::Value) -> RawMessage {
         serde_json::from_value(value).expect("message should parse")
-    }
-
-    #[test]
-    fn headings_become_bold() {
-        assert_eq!(strip_hashes("# Title"), "**Title**");
-        assert_eq!(strip_hashes("### Deep"), "**Deep**");
-        assert_eq!(strip_hashes("# 1. **重点**"), "**1. 重点**");
-        assert_eq!(strip_hashes("####### too many"), "####### too many");
-        assert_eq!(strip_hashes("#nospace"), "#nospace");
-        assert_eq!(strip_hashes("# "), "# ");
-        assert_eq!(strip_hashes("a *b* c"), "a *b* c");
-        assert_eq!(strip_hashes("# a *b* c"), "**a *b* c**");
-        assert_eq!(strip_hashes("plain\ntext"), "plain\ntext");
-        assert_eq!(strip_hashes("a\n## b\nc"), "a\n**b**\nc");
-    }
-
-    /// 整条标题必须落在一个加粗里：外层一对 `**` 之内不得再出现 `**`。
-    #[test]
-    fn heading_is_bold_as_a_whole() {
-        for (input, expected) in [
-            ("# **Bold**", "**Bold**"),
-            ("# 1. **A** 2. **B**", "**1. A 2. B**"),
-            ("# 🌅 **早晨**", "**🌅 早晨**"),
-            (
-                "## 方案一：**“水珠”——像吃水果**",
-                "**方案一：“水珠”——像吃水果**",
-            ),
-        ] {
-            let out = strip_hashes(input);
-            assert_eq!(out, expected, "input: {input}");
-            let inner = &out[2..out.len() - 2];
-            assert!(!inner.contains("**"), "内层仍有 **（未整条加粗）: {out}");
-        }
-    }
-
-    #[test]
-    fn heading_keeps_bold_inside_inline_code() {
-        assert_eq!(
-            strip_hashes("# 匹配 `**/*.js` 的路径"),
-            "**匹配 `**/*.js` 的路径**"
-        );
-        assert_eq!(strip_hashes("# a ``**x**`` b"), "**a ``**x**`` b**");
-    }
-
-    #[test]
-    fn strip_hashes_preserves_code() {
-        let fenced = "```python\n# 注释\n## another\n```";
-        assert_eq!(strip_hashes(fenced), fenced);
-        let tildes = "~~~\n# 注释\n~~~";
-        assert_eq!(strip_hashes(tildes), tildes);
-        let indented = "    # 缩进四格";
-        assert_eq!(strip_hashes(indented), indented);
-        let mixed = "# Title\n```\n# inside\n```\n## Real";
-        assert_eq!(
-            strip_hashes(mixed),
-            "**Title**\n```\n# inside\n```\n**Real**"
-        );
-    }
-
-    #[test]
-    fn sanitize_matches_cherry_rules() {
-        assert_eq!(sanitize_filename("a/b:c*d?e\"f<g>h|i"), "abcdefghi");
-        assert_eq!(sanitize_filename("  spaced  "), "spaced");
-        assert_eq!(sanitize_filename("a\nb\tc"), "abc");
-        assert_eq!(sanitize_filename(""), "");
-        assert_eq!(sanitize_path_component("", DEFAULT_ASSISTANT), "Assistant");
-        assert_eq!(
-            sanitize_path_component("..", DEFAULT_ASSISTANT),
-            "Assistant"
-        );
-        assert_eq!(
-            truncate_chars(&"字".repeat(100), ENTRY_TITLE_MAX)
-                .chars()
-                .count(),
-            80
-        );
     }
 
     #[test]
@@ -1250,25 +865,18 @@ mod tests {
         let Outcome::Rendered(rendered) = render_conversation(&conversation, &settings) else {
             panic!("expected rendered");
         };
+        let markdown = rendered.render();
 
-        assert!(rendered.markdown.starts_with("## Metadata\n\n"));
-        assert!(rendered.markdown.contains("- **Model:** `m1`"));
-        assert!(
-            rendered
-                .markdown
-                .contains("- **Conversation ID:** `conv-1`")
-        );
-        assert!(rendered.markdown.contains("- **Assistant:** `Assistant`"));
-        assert!(rendered.markdown.contains("### 🧑‍💻 User"));
-        assert!(rendered.markdown.contains("**标题**\n正文"));
-        assert!(
-            rendered
-                .markdown
-                .contains("#### 🤔 Thought Process\n\n思考中")
-        );
-        assert!(rendered.markdown.contains("#### 💡 Response\n\n回答"));
-        assert!(rendered.markdown.contains("![image](file:///data/a.png)"));
-        assert!(rendered.entry_name.ends_with("-Demo.md"));
+        assert!(markdown.starts_with("## Metadata\n\n"));
+        assert!(markdown.contains("- **Model:** `m1`"));
+        assert!(markdown.contains("- **Conversation ID:** `conv-1`"));
+        assert!(markdown.contains("- **Assistant:** `Assistant`"));
+        assert!(markdown.contains("### 🧑‍💻 User"));
+        assert!(markdown.contains("**标题**\n正文"));
+        assert!(markdown.contains("#### 🤔 Thought Process\n\n思考中"));
+        assert!(markdown.contains("#### 💡 Response\n\n回答"));
+        assert!(markdown.contains("![image](file:///data/a.png)"));
+        assert_eq!(rendered.group.as_deref(), Some("Assistant"));
     }
 
     #[test]
@@ -1294,13 +902,15 @@ mod tests {
         else {
             panic!("expected rendered");
         };
-        assert!(!rendered.markdown.contains("### 🧑‍💻 User"));
-        assert!(rendered.markdown.contains("#### 🤔 Thought Process"));
-        assert!(!rendered.markdown.contains("#### 💡 Response"));
-        assert!(
-            rendered
-                .entry_name
-                .contains("/00000000-000000-Untitled_Conversation.md")
+        let markdown = rendered.render();
+        assert!(!markdown.contains("### 🧑‍💻 User"));
+        assert!(markdown.contains("#### 🤔 Thought Process"));
+        assert!(!markdown.contains("#### 💡 Response"));
+        assert!(!markdown.contains("- **Time:**"));
+        // 空标题由 chatformat 兜底成 Untitled_Conversation
+        assert_eq!(
+            chatformat::sanitize_filename_with(&rendered.title, 100, "Untitled_Conversation"),
+            "Untitled_Conversation"
         );
     }
 
@@ -1319,21 +929,6 @@ mod tests {
         assert_eq!(
             resolve_model(&conversation, &SettingsIndex::empty()),
             "Unknown"
-        );
-    }
-
-    #[test]
-    fn duplicate_entry_names_get_suffix() {
-        let mut used = HashSet::new();
-        let name = "A/20240101-000000-T.md";
-        assert_eq!(unique_entry_name(name, &mut used), name);
-        assert_eq!(
-            unique_entry_name(name, &mut used),
-            "A/20240101-000000-T-2.md"
-        );
-        assert_eq!(
-            unique_entry_name(name, &mut used),
-            "A/20240101-000000-T-3.md"
         );
     }
 

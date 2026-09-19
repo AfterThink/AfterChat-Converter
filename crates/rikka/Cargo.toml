@@ -9,7 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0"
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
+chatformat = { package = "afterchat-chatformat", path = "../chatformat" }
 clap = { version = "4.5", features = ["derive"] }
 rayon = "1.10"
 rusqlite = { version = "0.32", features = ["bundled"] }
