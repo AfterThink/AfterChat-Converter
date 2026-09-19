@@ -54,11 +54,11 @@ cd converter/gui
 bun tauri dev
 ```
 
-这条命令会自动做两件事：
+这条命令会自动做三件事：
 
 1. 编译 Rust 转换器 sidecar 到工作区 `target/`
 2. 复制 sidecar 到 `converter/gui/src-tauri/bin/`
-3. 启动 Vite 和 Tauri 开发窗口
+3. 启动 Tauri 开发窗口（直接加载原生 HTML/JS/CSS，不依赖 Vite）
 
 ## 生产构建
 

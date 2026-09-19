@@ -1,34 +1,40 @@
 # 构建与开发指南
 
-本项目采用 **Cargo Workspace** 结构，并结合 **Git Submodules** 管理多个独立转换器。GUI 入口基于 **Tauri**，并自动集成所有转换器。
+本仓库是一个 **Cargo Workspace monorepo**：所有转换器（`converter/*`）与 Tauri GUI（`converter/gui`）都在同一个仓库里。GUI 会自动把各转换器编译成 sidecar 并一起打包。
 
 ---
 
 ## 🚀 快速开始 (推荐开发流程)
 
-如果你主要进行 GUI 开发，**只需要**执行以下步骤：
+如果你主要进行 GUI 开发，**只需要**执行：
 
-1. **环境初始化 (仅首次或拉取后)**:
-   ```powershell
-   git submodule update --init --recursive
-   ```
-
-2. **启动 GUI 开发模式**:
-   进入 GUI 目录并启动，它会**自动编译**所有子模块转换器：
+1. **安装依赖 (仅首次)**:
    ```powershell
    cd converter/gui
    bun install
+   ```
+
+2. **启动 GUI 开发模式**:
+   ```powershell
    bun run dev
    ```
-   > **💡 提示**: `bun run dev` (即 `tauri dev`) 现在直接加载原生 HTML/JS/CSS，不再依赖 Vite 编译。它依然会自动调用预处理脚本编译转换器并作为 Sidecar 注入。
+   > **💡 提示**: `bun run dev` (即 `tauri dev`) 直接加载原生 HTML/JS/CSS，不依赖 Vite。它会自动调用预处理脚本编译所有转换器并作为 Sidecar 注入。
 
 ---
 
-## 🛠️ 核心架构说明
+## 🛠️ 目录结构
 
-- **Workspace**: 根目录的 [Cargo.toml](file:///c:/Users/Mutsumi/Desktop/converters/Cargo.toml) 管理所有成员。
-- **Submodules**: [converter/ai-studio](file:///c:/Users/Mutsumi/Desktop/converters/converter/ai-studio), [converter/cherry](file:///c:/Users/Mutsumi/Desktop/converters/converter/cherry), [converter/qwen](file:///c:/Users/Mutsumi/Desktop/converters/converter/qwen), [converter/claude](file:///c:/Users/Mutsumi/Desktop/converters/converter/claude), [converter/rikka](file:///c:/Users/Mutsumi/Desktop/converters/converter/rikka) 是独立仓库。
-- **GUI**: [converter/gui](file:///c:/Users/Mutsumi/Desktop/converters/converter/gui) 是本地成员，通过 Sidecar 机制调用转换器。
+| 路径 | 说明 |
+| --- | --- |
+| `converter/ai-studio` | Google AI Studio 转换器，二进制 `ai-studio` |
+| `converter/cherry` | Cherry Studio 备份转换器，二进制 `cherry` |
+| `converter/qwen` | Qwen 转换器，二进制 `qwen` |
+| `converter/claude` | Claude 转换器，二进制 `claude` |
+| `converter/rikka` | RikkaHub 备份转换器，二进制 `rikka` |
+| `converter/gui` | Tauri + Bun 桌面 GUI，通过 Sidecar 调用上面的转换器 |
+
+- **Workspace**: 根目录的 `Cargo.toml` 把所有转换器与 `converter/gui/src-tauri` 列为成员，共享同一个 `Cargo.lock` 与 `target/`。
+- 每个转换器仍然是独立的 crate 和独立可执行文件，可以单独 `cargo run -p <pkg> -- <input>` 使用，也可以把文件直接拖到单个 exe 上。
 
 ---
 
@@ -36,7 +42,7 @@
 
 ### 整体构建 (命令行版本)
 ```powershell
-cargo build
+cargo build --release
 ```
 
 ### 构建 GUI 发布包
@@ -47,42 +53,18 @@ bun run build
 
 ---
 
-## 🔄 子模块 (Submodule) 维护指南
+## 🔄 Monorepo 维护
 
-由于转换器是独立仓库，维护时请参考以下场景：
+### 新增一个转换器
 
-### 场景 A：同步他人修改 (最常见)
-当你在其他地方更新了转换器仓库，或者协作者更新了代码：
-1. **拉取最新子模块**:
-   ```powershell
-   git submodule update --remote --merge
-   ```
-2. **提交主仓库指针**:
-   ```powershell
-   git add .
-   git commit -m "chore: 升级转换器到最新版本"
-   ```
+1. 在 `converter/<name>` 下创建 crate（`Cargo.toml` + `src/`）。
+2. 加入根 `Cargo.toml` 的 `members`。
+3. 在 `converter/gui/scripts/prepare-sidecars.mjs` 的 `binaries` 数组登记 `{ pkg, bin }`。
+4. 在 `converter/gui/src-tauri/tauri.conf.json` 的 `tauri.bundle.externalBin` 追加 `bin/<bin>`。
+5. 在 `converter/gui/src-tauri/src/main.rs` 的 `ConverterKind`、`ALL_CONVERTERS`、sidecar 名称匹配中登记。
+6. 在 `converter/gui/src/main.js` 增加文件名路由与输出类型判断（参考现有分支）。
+7. 更新 `converter/gui/src/index.html` 的支持格式列表。
 
-### 场景 B：在本仓库中修改转换器代码
-如果你想在当前工程下直接改转换器代码：
-1. **进入目录并切换分支** (关键：避免 Detached HEAD):
-   ```powershell
-   cd converter/ai-studio
-   git checkout main
-   ```
-2. **修改、提交并推送**:
-   ```powershell
-   git add .
-   git commit -m "feat: 改进转换逻辑"
-   git push origin main
-   ```
-3. **回到主仓库更新指针**:
-   ```powershell
-   cd ../..
-   git add converter/ai-studio
-   git commit -m "chore: 更新子模块指针"
-   ```
+### 发布
 
-### ⚠️ 核心注意事项
-- **不要在游离状态提交**: 始终确保在子模块目录执行了 `git checkout main` 后再提交代码。
-- **双重提交**: 修改子模块后，必须先在子模块内 `push`，再在主仓库 `commit` 指针变更。
+打 `v*` tag 会触发 `.github/workflows/release.yml`，CI 自动编译全部 sidecar 并打包 Windows 安装包。因为是 monorepo，**不需要任何跨仓库 token**。
