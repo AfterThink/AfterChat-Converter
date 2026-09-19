@@ -24,7 +24,7 @@
 5.  **用户操作/自动触发**：前端调用 `run_conversion`。
 6.  **后端**：
     *   如果请求中指定了 `converter`，则仅尝试该转换器。
-    *   如果未指定，则按顺序尝试所有转换器（AiStudio -> Cherry -> Qwen），第一个返回退出码 0 的视为成功。
+    *   如果未指定，则按顺序尝试所有转换器（AiStudio -> Cherry -> Qwen -> Claude -> Rikka），第一个返回退出码 0 的视为成功。
     *   构建参数并执行侧车程序。
 7.  **侧车程序**：执行实际转换。
 8.  **后端**：捕获输出并将结果返回。
@@ -154,3 +154,5 @@ struct ConvertResponse {
 | **Google AI Studio** | `ai-studio` | `google-ai-studio-json-converter` |
 | **Cherry Studio** | `cherry` | `cherry-studio-backup-json-converter` |
 | **Qwen** | `qwen` | `qwen-json-converter` |
+| **Claude** | `claude` | `claude-json-converter` |
+| **RikkaHub** | `rikka` | `rikkahub-db-converter` |

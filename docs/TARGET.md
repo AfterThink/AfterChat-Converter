@@ -63,6 +63,7 @@
 *   **路由逻辑**：前端根据拖入的文件/文件夹名称进行判断。这个规则可以保持简单。
     *   文件名含 `cherry` -> 调用 `cherry-studio-backup-json-converter`。
     *   文件名含 `qwen` -> 调用 `qwen-json-converter`。
+    *   文件名含 `rikka` -> 调用 `rikkahub-db-converter`（RikkaHub 备份 zip / db）。
     *   其他情况（如文件夹或无明确关键词的文件） -> 调用 `google-ai-studio-json-converter`。
 *   **参数传递**：
     *   输入路径：拖拽的文件/文件夹的绝对路径。
@@ -77,5 +78,5 @@
 ## 技术约束
 
 1.  **技术栈**：Tauri。
-2.  **后端集成**：仅通过 tauri::api::process::Command 调用 `bin/` 目录下的三个可执行文件，不修改其源码。
+2.  **后端集成**：仅通过 tauri::api::process::Command 调用 `bin/` 目录下的可执行文件，不修改其源码。
 3.  **平台**：保持跨平台兼容性 (macOS, Windows, Linux)。

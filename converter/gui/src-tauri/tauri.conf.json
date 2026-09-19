@@ -37,7 +37,8 @@
         "bin/ai-studio",
         "bin/cherry",
         "bin/qwen",
-        "bin/claude"
+        "bin/claude",
+        "bin/rikka"
       ],
       "identifier": "com.openai.converters"
     },

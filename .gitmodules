@@ -10,3 +10,6 @@
 [submodule "converter/claude"]
 	path = converter/claude
 	url = https://github.com/AfterThink/claude-json-converter
+[submodule "converter/rikka"]
+	path = converter/rikka
+	url = https://github.com/AfterThink/rikkahub-db-converter

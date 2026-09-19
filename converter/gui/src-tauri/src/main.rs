@@ -48,13 +48,15 @@ enum ConverterKind {
     Cherry,
     Qwen,
     Claude,
+    Rikka,
 }
 
-const ALL_CONVERTERS: [ConverterKind; 4] = [
+const ALL_CONVERTERS: [ConverterKind; 5] = [
     ConverterKind::AiStudio,
     ConverterKind::Cherry,
     ConverterKind::Qwen,
     ConverterKind::Claude,
+    ConverterKind::Rikka,
 ];
 
 #[derive(Debug, Deserialize)]
@@ -177,6 +179,7 @@ async fn try_sidecar(converter: ConverterKind, args: &[String]) -> Result<Sideca
         ConverterKind::Cherry => "cherry",
         ConverterKind::Qwen => "qwen",
         ConverterKind::Claude => "claude",
+        ConverterKind::Rikka => "rikka",
     };
 
     let (mut receiver, _child) = Command::new_sidecar(sidecar_name)

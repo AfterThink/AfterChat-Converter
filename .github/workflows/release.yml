@@ -27,7 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${SUBMODULES_TOKEN}" ]; then
-            echo "::error::Missing secret PRIVATE_SUBMODULES_TOKEN. Add a token with read access to AfterThink/google-ai-studio-json-converter, AfterThink/cherry-studio-backup-json-converter, and AfterThink/qwen-json-converter."
+            echo "::error::Missing secret PRIVATE_SUBMODULES_TOKEN. Add a token with read access to AfterThink/google-ai-studio-json-converter, AfterThink/cherry-studio-backup-json-converter, AfterThink/qwen-json-converter, AfterThink/claude-json-converter, and AfterThink/rikkahub-db-converter."
             exit 1
           fi
 

@@ -17,6 +17,7 @@ const binaries = [
   { pkg: "cherry-studio-backup-json-converter", bin: "cherry" },
   { pkg: "qwen-json-converter", bin: "qwen" },
   { pkg: "claude-json-converter", bin: "claude" },
+  { pkg: "rikkahub-db-converter", bin: "rikka" },
 ];
 
 mkdirSync(tauriBinDir, { recursive: true });

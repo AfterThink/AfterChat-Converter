@@ -397,7 +397,7 @@ function buildSuggestedPath(input) {
 }
 
 function converterOutputsDirectory(converter) {
-  return converter === null || converter === "cherry" || converter === "claude";
+  return converter === null || converter === "cherry" || converter === "claude" || converter === "rikka";
 }
 
 function selectConverter(input) {
@@ -406,6 +406,7 @@ function selectConverter(input) {
   if (name.includes("cherry")) return "cherry";
   if (name.includes("qwen")) return "qwen";
   if (name.includes("batch") || name.includes("claude")) return "claude";
+  if (name.includes("rikka")) return "rikka";
   if (name.includes("ai-studio") || name.includes("aistudio") || name.includes("gemini")) return "ai-studio";
   return null;
 }

@@ -1,11 +1,12 @@
 # Converters GUI
 
-一个基于 Tauri + Bun 的桌面 GUI，用来拖拽调用仓库里的四个转换器：
+一个基于 Tauri + Bun 的桌面 GUI，用来拖拽调用仓库里的转换器：
 
 - `google-ai-studio-json-converter`
 - `cherry-studio-backup-json-converter`
 - `qwen-json-converter`
 - `claude-json-converter`
+- `rikkahub-db-converter`
 
 ## 功能
 
@@ -14,6 +15,7 @@
   - 名称包含 `cherry` → `cherry-studio-backup-json-converter`
   - 名称包含 `qwen` → `qwen-json-converter`
   - 名称包含 `claude` → `claude-json-converter`
+  - 名称包含 `rikka` → `rikkahub-db-converter`
   - 其他情况 → `google-ai-studio-json-converter`
 - 默认输出到原位置旁边
 - 取消勾选后，立即弹原生保存路径对话框
@@ -67,7 +69,7 @@ bun tauri build
 
 这条命令会自动：
 
-1. 以 `--release` 编译三个转换器
+1. 以 `--release` 编译所有转换器
 2. 复制 release sidecar 到 `src-tauri/bin/`
 3. 构建前端静态资源
 4. 打包 Tauri 应用

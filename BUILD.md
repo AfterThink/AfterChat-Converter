@@ -27,7 +27,7 @@
 ## 🛠️ 核心架构说明
 
 - **Workspace**: 根目录的 [Cargo.toml](file:///c:/Users/Mutsumi/Desktop/converters/Cargo.toml) 管理所有成员。
-- **Submodules**: [converter/ai-studio](file:///c:/Users/Mutsumi/Desktop/converters/converter/ai-studio), [converter/cherry](file:///c:/Users/Mutsumi/Desktop/converters/converter/cherry), [converter/qwen](file:///c:/Users/Mutsumi/Desktop/converters/converter/qwen) 是独立仓库。
+- **Submodules**: [converter/ai-studio](file:///c:/Users/Mutsumi/Desktop/converters/converter/ai-studio), [converter/cherry](file:///c:/Users/Mutsumi/Desktop/converters/converter/cherry), [converter/qwen](file:///c:/Users/Mutsumi/Desktop/converters/converter/qwen), [converter/claude](file:///c:/Users/Mutsumi/Desktop/converters/converter/claude), [converter/rikka](file:///c:/Users/Mutsumi/Desktop/converters/converter/rikka) 是独立仓库。
 - **GUI**: [converter/gui](file:///c:/Users/Mutsumi/Desktop/converters/converter/gui) 是本地成员，通过 Sidecar 机制调用转换器。
 
 ---
