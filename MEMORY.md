@@ -34,7 +34,7 @@
 - `thinking_summary.content` 是空串，真内容在 `extra.summary_title.content[]`（→ `**标题**`）
   与 `extra.summary_thought.content[]`（→ `- 条目`）。
 - 没有思考时不输出 `#### 💡 Response` 头。
-- `# 标题` → `**加粗**`。
+- `# 标题` → `**加粗**`（**整条**加粗：吸收标题内原有的 `**`，行内代码段除外）。
 
 ## 命名 / 打包
 
@@ -51,13 +51,13 @@
 - 读取时剥离 UTF-8 BOM（`serde_json` 不接受 BOM）。
 - 会话对象必须含 `chat`，否则拒绝 —— 防止误吞 `tauri.conf.json` 之类无关文件。
 
-## 已知偏离 JS（有意为之）
+## 与 JS 参考实现的一致性
 
-- **代码围栏内不转换井号**。JS 的 `stripHashes` 是朴素正则，会把 Python/Shell 的 `# 注释`
-  改成 `**注释**`（真实数据上 195 个会话里有 866 行受影响）。Rust 侧做了围栏感知，
-  且 `CHATFORMAT.md` 本身就要求「保留原 Markdown 内容（代码块…）」。
-  golden fixture 内围栏行数为 0，因此对齐测试不受影响。
-  > 待办：JS 里 `stripHashes` 被复制粘贴了 30+ 份，尚未统一修；后续建议抽成共享 helper。
+`stripHashes` 已在 JS 侧收敛为**模块级唯一实现**（AfterChat-Script-Dev 1.18.7）：
+围栏感知 + 空值安全 + 整条标题加粗。Rust 侧行为与之完全一致。
+
+验证方式：用 21 个标题 + 代码围栏用例建成同一个输入，Rust 二进制与 JS 适配器各跑一遍，
+逐字节 `cmp` 一致（SHA256 `66e29e2e…`）；单元测试见 `heading_is_bold_as_a_whole`。
 
 ## Windows 构建提示
 

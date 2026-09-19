@@ -121,6 +121,8 @@ qwen <JSON>... [-o <PATH>] [--progress <BOOL>]
 - 重复文本按 `trim()` 后去重
 - `strip_hashes`：`^#{1,6}\s+(.+)$` → `**$1**`（逐行）
   - **跳过代码围栏内部**（```` ``` ```` / `~~~` 起止），只处理围栏外
+  - **吸收标题内的 `**`**（`remove_bold_outside_code`，行内代码段除外），使整条标题落在一个加粗里；
+    否则内外层 `**` 同级交错，CommonMark 会错配定界符（表现：强调不全 / 残留可见星号）
   - `strip_hashes` 应用于思考段与回复段整体（含 `thinking_summary` 生成的 `**标题**`，其本身不会被二次改写）
 
 ## 5. 字段语义与提取
@@ -197,7 +199,7 @@ qwen <JSON>... [-o <PATH>] [--progress <BOOL>]
 - 输入形态：顶层数组 / 包装 `data` 数组 / `data` 单对象 / bare 对象 / 非会话 JSON 拒绝
 - 关键回归：`data` 数组长度 1 仍应产出 zip
 - 内容：phase 分派、`thinking_summary` 的 `extra` 取值、工具 phase 忽略、无思考时不输出 Response 头
-- 文本：井号转加粗、**代码围栏内不转**、BOM 输入
+- 文本：井号转加粗、**整条标题加粗**（吸收内层 `**`，行内代码除外）、**代码围栏内不转**、BOM 输入
 - 命名：`sanitize_filename` 边界、zip 条目时间降序、同时间戳加后缀
 - CLI：拖拽式调用、`-o` 目录 / 文件、多输入
 - 一致性：与 JS golden fixture 逐字节比对（人工脚本，见 README）

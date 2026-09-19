@@ -210,7 +210,12 @@ fn multiple_inputs_are_each_converted() {
     fs::write(&single, single_export_json()).expect("write single");
     fs::write(
         &all,
-        all_export_json(serde_json::json!([session("b", "Beta", 1_700_000_100, "beta")])),
+        all_export_json(serde_json::json!([session(
+            "b",
+            "Beta",
+            1_700_000_100,
+            "beta"
+        )])),
     )
     .expect("write all");
 

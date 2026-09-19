@@ -73,8 +73,12 @@ pub fn run_conversion(options: ConvertOptions) -> Result<RunSummary> {
 
     for input in &options.inputs {
         summary.inputs += 1;
-        match convert_one(input, options.output.as_deref(), exact_output.is_some(), options.show_progress)
-        {
+        match convert_one(
+            input,
+            options.output.as_deref(),
+            exact_output.is_some(),
+            options.show_progress,
+        ) {
             Ok(path) => summary.outputs.push(path),
             Err(err) => {
                 warn!("failed to convert {}: {err:#}", input.display());
@@ -99,8 +103,8 @@ fn convert_one(
         bail!("input must be a JSON file: {}", input.display());
     }
 
-    let raw = fs::read_to_string(input)
-        .with_context(|| format!("failed to read {}", input.display()))?;
+    let raw =
+        fs::read_to_string(input).with_context(|| format!("failed to read {}", input.display()))?;
     // ChatFormat 允许 UTF-8 BOM，但 serde_json 不接受，这里先剥掉。
     let value: Value = serde_json::from_str(raw.trim_start_matches('\u{feff}'))
         .with_context(|| format!("failed to parse json in {}", input.display()))?;
@@ -347,7 +351,12 @@ fn render_conversation(messages: &[Message]) -> String {
     let mut lines: Vec<String> = Vec::new();
 
     for message in messages {
-        match message.role.as_deref().map(str::to_ascii_lowercase).as_deref() {
+        match message
+            .role
+            .as_deref()
+            .map(str::to_ascii_lowercase)
+            .as_deref()
+        {
             Some("user") => {
                 let text = message.content.as_deref().unwrap_or("");
                 if text.is_empty() {
@@ -441,7 +450,10 @@ fn render_thinking_summary(item: &Value) -> Option<String> {
     let extra = item.get("extra")?;
     let mut parts: Vec<String> = Vec::new();
 
-    if let Some(titles) = extra.pointer("/summary_title/content").and_then(Value::as_array) {
+    if let Some(titles) = extra
+        .pointer("/summary_title/content")
+        .and_then(Value::as_array)
+    {
         let joined: Vec<&str> = titles
             .iter()
             .filter_map(Value::as_str)
@@ -453,7 +465,10 @@ fn render_thinking_summary(item: &Value) -> Option<String> {
         }
     }
 
-    if let Some(items) = extra.pointer("/summary_thought/content").and_then(Value::as_array) {
+    if let Some(items) = extra
+        .pointer("/summary_thought/content")
+        .and_then(Value::as_array)
+    {
         for text in items.iter().filter_map(Value::as_str) {
             let text = text.trim();
             if !text.is_empty() {
@@ -520,7 +535,11 @@ fn session_messages(session: &Session) -> Vec<Message> {
 
 /// `^#{1,6}\s+(.+)$`（多行）→ `**$1**`：不保留井号标题，但保留强调。
 ///
-/// **代码围栏内不动**（``` / ~~~），否则会把 Python / Shell 的 `# 注释` 误改成加粗。
+/// 1. **代码围栏内不动**（``` / ~~~），否则会把 Python / Shell 的 `# 注释` 误改成加粗。
+/// 2. **整条标题加粗**：标题内原有的 `**` 会被吸收。否则外层 `**` 与内层 `**` 同级交错，
+///    CommonMark 会错配定界符，导致整条标题强调不全、甚至残留可见的 `**`
+///    （如 `## 方案一：**“…”**`）。整条加粗后内层加粗本就是冗余的。
+///    但行内代码（`` ` ``）里的 `**` 不是强调（如 glob `**/*.js`），必须原样保留。
 fn strip_hashes(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut fence: Option<&'static str> = None;
@@ -572,7 +591,53 @@ fn strip_hashes_line(line: &str) -> Cow<'_, str> {
         return Cow::Borrowed(line);
     }
 
-    Cow::Owned(format!("**{trimmed}**"))
+    // 吸收标题内的 `**`，使整条标题落在一个加粗里（行内代码段除外）
+    let merged = remove_bold_outside_code(trimmed);
+    let inner = merged.trim();
+    if inner.is_empty() {
+        return Cow::Borrowed(line);
+    }
+
+    Cow::Owned(format!("**{inner}**"))
+}
+
+/// 去掉不在行内代码段里的 `**`。
+///
+/// 行内代码由反引号界定（CommonMark 的 code span 规则：N 个反引号开始，
+/// 同样 N 个反引号结束），其中的 `**` 属于代码内容（如 glob `**/*.js`），原样保留。
+fn remove_bold_outside_code(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut index = 0;
+    // 当前代码段的定界反引号个数；0 表示不在代码段内
+    let mut open_ticks = 0;
+
+    while index < bytes.len() {
+        if bytes[index] == b'`' {
+            let start = index;
+            while index < bytes.len() && bytes[index] == b'`' {
+                index += 1;
+            }
+            let run = index - start;
+            if open_ticks == 0 {
+                open_ticks = run;
+            } else if open_ticks == run {
+                open_ticks = 0;
+            }
+            out.push_str(&text[start..index]);
+        } else if open_ticks == 0 && bytes[index] == b'*' && bytes.get(index + 1) == Some(&b'*') {
+            index += 2;
+        } else {
+            let ch = text[index..]
+                .chars()
+                .next()
+                .expect("index is on a char boundary");
+            out.push(ch);
+            index += ch.len_utf8();
+        }
+    }
+
+    out
 }
 
 fn collect_strings(value: &Value, out: &mut Vec<String>) {
@@ -793,12 +858,14 @@ fn write_zip_export(
 /// 时间降序（最新在前），无时间的垫底并保持原有相对顺序。
 fn order_sessions(sessions: &[Session]) -> Vec<usize> {
     let mut order: Vec<usize> = (0..sessions.len()).collect();
-    order.sort_by(|&a, &b| match (session_sort_ms(&sessions[a]), session_sort_ms(&sessions[b])) {
-        (None, None) => a.cmp(&b),
-        (None, Some(_)) => Ordering::Greater,
-        (Some(_), None) => Ordering::Less,
-        (Some(left), Some(right)) => right.cmp(&left).then_with(|| a.cmp(&b)),
-    });
+    order.sort_by(
+        |&a, &b| match (session_sort_ms(&sessions[a]), session_sort_ms(&sessions[b])) {
+            (None, None) => a.cmp(&b),
+            (None, Some(_)) => Ordering::Greater,
+            (Some(_), None) => Ordering::Less,
+            (Some(left), Some(right)) => right.cmp(&left).then_with(|| a.cmp(&b)),
+        },
+    );
     order
 }
 
@@ -840,7 +907,10 @@ fn build_failure_markdown(total: usize, failures: &[SessionFailure]) -> String {
         "- **Export Time:** {}",
         format_local_time(chrono::Utc::now().timestamp())
     ));
-    lines.push(format!("- **Total Conversations:** {}", total + failures.len()));
+    lines.push(format!(
+        "- **Total Conversations:** {}",
+        total + failures.len()
+    ));
     lines.push(format!("- **Exported:** {total}"));
     lines.push(format!("- **Failed:** {}", failures.len()));
     lines.push(String::new());
@@ -859,8 +929,7 @@ fn build_failure_markdown(total: usize, failures: &[SessionFailure]) -> String {
 
 fn make_progress_bar(total: u64, unit: &str) -> ProgressBar {
     let pb = ProgressBar::new(total);
-    let template =
-        "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg} ({per_sec}, ETA {eta})";
+    let template = "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg} ({per_sec}, ETA {eta})";
     let style = ProgressStyle::with_template(template)
         .unwrap_or_else(|_| ProgressStyle::default_bar())
         .progress_chars("=> ");
@@ -1031,6 +1100,44 @@ mod tests {
         assert_eq!(strip_hashes("a\n## b\nc"), "a\n**b**\nc");
     }
 
+    /// 整条标题必须落在一个加粗里：外层一对 `**` 之内不得再出现 `**`，
+    /// 否则 CommonMark 会错配定界符（表现为只有某个词被强调，或残留可见星号）。
+    #[test]
+    fn heading_is_bold_as_a_whole() {
+        for (input, expected) in [
+            ("# 1. **多分辨率策略不能丢**", "**1. 多分辨率策略不能丢**"),
+            (
+                "## 方案一：**“水珠胶囊”——像吃水果一样喝水**",
+                "**方案一：“水珠胶囊”——像吃水果一样喝水**",
+            ),
+            (
+                "## 🫧 **[水球捕捉法](ca://x)**  ",
+                "**🫧 [水球捕捉法](ca://x)**",
+            ),
+            ("# 🌅 **早晨的第一瞬间**", "**🌅 早晨的第一瞬间**"),
+            ("# 1. **A** 2. **B**", "**1. A 2. B**"),
+            ("# **Bold**", "**Bold**"),
+            ("# Plain Title", "**Plain Title**"),
+            ("# a *b* c", "**a *b* c**"),
+        ] {
+            let out = strip_hashes(input);
+            assert_eq!(out, expected, "input: {input}");
+            let inner = &out[2..out.len() - 2];
+            assert!(!inner.contains("**"), "内层仍有 **（未整条加粗）: {out}");
+        }
+    }
+
+    #[test]
+    fn heading_keeps_bold_inside_inline_code() {
+        // glob 里的 `**` 不是强调，不能当成内层加粗吸收掉
+        assert_eq!(
+            strip_hashes("# 匹配 `**/*.js` 的路径"),
+            "**匹配 `**/*.js` 的路径**"
+        );
+        // 双反引号代码段同样受保护
+        assert_eq!(strip_hashes("# a ``**x**`` b"), "**a ``**x**`` b**");
+    }
+
     #[test]
     fn strip_hashes_preserves_code_fences() {
         let text = "# Title\n```python\n# a comment\n## another\n```\n## Real Heading\n~~~\n# tilde comment\n~~~";
@@ -1047,7 +1154,10 @@ mod tests {
 
     #[test]
     fn sanitize_matches_js_rules() {
-        assert_eq!(sanitize_filename("a/b:c*d?e\"f<g>h|i", 60), "a_b_c_d_e_f_g_h_i");
+        assert_eq!(
+            sanitize_filename("a/b:c*d?e\"f<g>h|i", 60),
+            "a_b_c_d_e_f_g_h_i"
+        );
         assert_eq!(sanitize_filename("  many   spaces  ", 60), "many spaces");
         assert_eq!(sanitize_filename("", 60), "untitled");
         // JS trim 只去空白，不去点号
