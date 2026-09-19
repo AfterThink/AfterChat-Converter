@@ -1,539 +1,452 @@
-// Writen by Gemini 2.5 Pro Experimental 03-25, 2025/03/30
+//! 把 Google AI Studio 导出的 JSON 转换为 AfterChat 对话 Markdown。
+//!
+//! 输出契约见仓库 `docs/CHATFORMAT.md`，渲染走 `chatformat`。
+//!
+//! 形态（沿用既有实现）：
+//! - 输入**单个 JSON** → 输出**单个 `.md``**
+//! - 输入**目录**（递归找 `.json`）→ 输出**一棵平行的 `.md` 目录树**
+//!
+//! 时间取**输入文件的 mtime**（AI Studio 导出里没有对话时间字段）。
 
-use anyhow::{bail, Context, Result}; // Use anyhow for easy error handling
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::ExitCode;
+use std::time::UNIX_EPOCH;
+
+use anyhow::{Context, Result, bail};
+use chatformat::{
+    Conversation, MetadataLine, Message, Role, SINGLE_NAME_MAX, UNKNOWN_MODEL, sanitize_filename_with,
+};
 use clap::Parser;
-use filetime::{set_file_times, FileTime};
-use log::{error, info, warn}; // Logging macros
+use filetime::{FileTime, set_file_times};
+use log::{error, info, warn};
 use rayon::prelude::*;
-use regex::Regex;
-use serde::Deserialize; // Trait for deserialization
-use std::{fs, path::PathBuf};
+use serde::Deserialize;
 use walkdir::WalkDir;
-// --- Data Structures Mirroring JSON ---
-// Use Option<T> for fields that might be missing or null
-// Use #[serde(default)] for booleans that might be missing (defaults to false)
-// Use #[serde(rename_all = "camelCase")] to map JSON keys to Rust fields
 
-// #[derive(Deserialize, Debug)]
-// #[serde(rename_all = "camelCase")]
-// struct SafetySetting {
-//     // Keep fields even if unused for complete deserialization
-//     #[allow(dead_code)]
-//     category: String,
-//     #[allow(dead_code)]
-//     threshold: String,
-// }
+#[derive(Debug, Parser)]
+#[command(
+    name = "ai-studio",
+    version,
+    about = "Convert Google AI Studio export JSON into AfterChat Markdown"
+)]
+struct Cli {
+    /// Input JSON file, or a directory containing JSON files
+    input: PathBuf,
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
+    /// Output `.md` file (single input) or output directory (directory input)
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+}
+
+// ═══════════════════════════════════════════════════════════
+//  输入结构
+// ═══════════════════════════════════════════════════════════
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 struct RunSettings {
-    temperature: Option<f64>,
     model: Option<String>,
+    temperature: Option<f64>,
     top_p: Option<f64>,
     top_k: Option<u32>,
     max_output_tokens: Option<u32>,
-    // We don't strictly need all fields unless we use them
-    // safety_settings: Option<Vec<SafetySetting>>,
-    // response_mime_type: Option<String>,
-    // ... other fields
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
 struct SystemInstruction {
-    // Text might be null or the whole object might be missing
     text: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Chunk {
-    // Text might be null or missing
+    #[serde(default)]
     text: Option<String>,
-    // Role is expected to be present
     role: String,
-    // isThought might be missing, default to false
     #[serde(default)]
     is_thought: bool,
-    // token_count: Option<u32>, // ignore if not needed
-    // finish_reason: Option<String>, // ignore if not needed
 }
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 struct ChunkedPrompt {
-    // Chunks list is expected, but might be empty
     chunks: Vec<Chunk>,
-    // pending_inputs: Option<Vec<PendingInput>>, // ignore if not needed
 }
 
-// #[derive(Deserialize, Debug)]
-// struct PendingInput { // ignore if not needed
-//     text: Option<String>,
-//     role: Option<String>,
-// }
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 struct Root {
     run_settings: Option<RunSettings>,
     system_instruction: Option<SystemInstruction>,
     chunked_prompt: Option<ChunkedPrompt>,
 }
 
-// --- CLI Argument Parsing ---
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    /// Path to the input JSON file.
-    #[arg(required = true)] // Make it mandatory
-    json_path: PathBuf,
-
-    /// Path to the output Markdown file.
-    /// If not provided, defaults to '[input_filename].md' in the same directory.
-    #[arg(short, long)]
-    output: Option<PathBuf>,
+impl Root {
+    fn looks_like_export(&self) -> bool {
+        self.run_settings.is_some() || self.system_instruction.is_some() || self.chunked_prompt.is_some()
+    }
 }
 
-// --- Formatting Logic ---
+// ═══════════════════════════════════════════════════════════
+//  映射
+// ═══════════════════════════════════════════════════════════
 
-/// Formats the metadata section from the parsed JSON data.
-fn format_metadata(root: &Root) -> Vec<String> {
-    let mut md_lines = Vec::new();
-    let mut has_metadata = false; // Track if the "## Metadata" header was added
+fn to_conversation(root: &Root, title: &str, time_secs: Option<i64>) -> Conversation {
+    let model = root
+        .run_settings
+        .as_ref()
+        .and_then(|settings| settings.model.as_deref())
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .unwrap_or(UNKNOWN_MODEL)
+        .to_string();
 
-    // --- Run Settings ---
-    // Check if run_settings exists and is Some
+    let mut extra = Vec::new();
     if let Some(settings) = &root.run_settings {
-        if !has_metadata {
-            md_lines.push("## Metadata".to_string());
-            md_lines.push("".to_string()); // Blank line
-            has_metadata = true;
+        if let Some(value) = settings.temperature {
+            extra.push(MetadataLine::code("Temperature", value.to_string()));
         }
-        md_lines.push("### Run Settings".to_string());
-        // Selectively add settings if they exist (are Some)
-        if let Some(val) = &settings.model {
-            md_lines.push(format!("- **Model:** `{}`", val));
+        if let Some(value) = settings.top_p {
+            extra.push(MetadataLine::code("Top P", value.to_string()));
         }
-        if let Some(val) = settings.temperature {
-            md_lines.push(format!("- **Temperature:** `{}`", val));
+        if let Some(value) = settings.top_k {
+            extra.push(MetadataLine::code("Top K", value.to_string()));
         }
-        if let Some(val) = settings.top_p {
-            md_lines.push(format!("- **Top P:** `{}`", val));
-        }
-        if let Some(val) = settings.top_k {
-            md_lines.push(format!("- **Top K:** `{}`", val));
-        }
-        if let Some(val) = settings.max_output_tokens {
-            md_lines.push(format!("- **Max Output Tokens:** `{}`", val));
-        }
-        md_lines.push("".to_string()); // Blank line after settings
-    }
-
-    // --- System Instruction ---
-    // Check if system_instruction is Some and its text field is Some and not empty
-    if let Some(instruction) = &root.system_instruction {
-        if let Some(text) = &instruction.text {
-            if !text.trim().is_empty() {
-                if !has_metadata {
-                    md_lines.push("## Metadata".to_string());
-                    md_lines.push("".to_string());
-                    // has_metadata = true; // No need to set again if already set
-                }
-                md_lines.push("### System Instruction".to_string());
-                md_lines.push(text.trim().to_string());
-                md_lines.push("".to_string());
-            }
+        if let Some(value) = settings.max_output_tokens {
+            extra.push(MetadataLine::code("Max Output Tokens", value.to_string()));
         }
     }
 
-    md_lines
-}
-
-/// Formats the conversation turns from the parsed JSON data.
-fn format_conversation(root: &Root) -> Vec<String> {
-    let mut md_lines = Vec::new();
-
-    // Check if chunked_prompt and chunks exist
-    let chunks = match &root.chunked_prompt {
-        Some(prompt) => &prompt.chunks,
-        None => {
-            warn!("No 'chunkedPrompt' found in JSON.");
-            // Return only the header if no chunks
-            md_lines.push("## Conversation".to_string());
-            md_lines.push("".to_string());
-            md_lines.push("*No conversation turns found in the JSON data.*".to_string());
-            return md_lines;
-        }
-    };
-
-    if chunks.is_empty() {
-        warn!("'chunks' array is empty.");
-        // Return only the header if chunks is empty
-        md_lines.push("## Conversation".to_string());
-        md_lines.push("".to_string());
-        md_lines.push("*Conversation turns array is empty.*".to_string());
-        return md_lines;
-    }
-
-    md_lines.push("## Conversation".to_string());
-    md_lines.push("".to_string()); // Blank line
-
-    let mut last_role: Option<String> = None;
-    let mut has_thought_pending = false; // Track if the last model output was a thought
-
-    for (i, chunk) in chunks.iter().enumerate() {
-        // Borrow role string for comparisons
-        let current_role = &chunk.role;
-        // Get text, trim, handle None or empty
-        let text = chunk
-            .text
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty());
-
-        match current_role.as_str() {
-            "user" => {
-                // Add space before new user turn if not the first turn
-                if last_role.is_some() {
-                    md_lines.push("".to_string());
-                }
-                md_lines.push("### 🧑‍💻 User".to_string());
-                if let Some(t) = text {
-                    md_lines.push(t.to_string());
-                }
-                last_role = Some(current_role.clone());
-                has_thought_pending = false; // Reset flag on user turn
-            }
-            "model" => {
-                // Print Assistant header only if role changes from user or it's the first model chunk
-                if last_role.as_deref() != Some("model") {
-                    // Add space before new assistant turn if needed
-                    if last_role.is_some() {
-                        md_lines.push("".to_string());
-                    }
-                    md_lines.push("### 🤖 Assistant".to_string());
-                    // Add extra space if subheadings might follow
-                    if chunk.is_thought {
-                        md_lines.push("".to_string());
-                    }
-                }
-
-                if chunk.is_thought {
-                    // Add space before thought if previous was a response
-                    if last_role.as_deref() == Some("model") && !has_thought_pending {
-                        md_lines.push("".to_string());
-                    }
-                    md_lines.push("#### 🤔 Thought Process".to_string());
-                    if let Some(t) = text {
-                        md_lines.push(t.to_string());
-                    }
-                    has_thought_pending = true; // Mark that a thought was just processed
-                } else {
-                    // This chunk is a response
-                    // Only add the "Response" sub-heading if it follows a thought
-                    if has_thought_pending {
-                        md_lines.push("".to_string()); // Space before subheading
-                        md_lines.push("#### 💡 Response".to_string());
-                    }
-                    // If has_thought_pending is False, no sub-heading needed.
-                    if let Some(t) = text {
-                        md_lines.push(t.to_string());
-                    }
-                    has_thought_pending = false; // Reset flag as this is a response
-                }
-                last_role = Some(current_role.clone());
-            }
-            _ => {
-                warn!("Chunk {} has unknown role '{}'. Skipping.", i, current_role);
-                // Reset state just in case
-                has_thought_pending = false;
-                last_role = Some("unknown".to_string()); // Track unknown roles if needed
-            }
-        }
-    }
-
-    md_lines
-}
-
-fn converter(input_json_path: &PathBuf, output_md_path: &PathBuf) -> Result<()> {
-    // --- Read JSON File ---
-    let json_content = fs::read_to_string(&input_json_path)
-        .with_context(|| format!("Failed to read JSON file: {}", input_json_path.display()))?;
-    info!("JSON file loaded successfully.");
-
-    // --- Parse JSON Content ---
-    let root: Root = serde_json::from_str(&json_content).with_context(|| {
-        format!(
-            "Failed to parse JSON content from: {}",
-            input_json_path.display()
-        )
-    })?;
-    info!("JSON content parsed successfully.");
-
-    if root.run_settings.is_none()
-        && root.system_instruction.is_none()
-        && root.chunked_prompt.is_none()
+    let mut messages = Vec::new();
+    if let Some(text) = root
+        .system_instruction
+        .as_ref()
+        .and_then(|instruction| instruction.text.as_deref())
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
     {
-        bail!("Not a Google AI Studio export: no runSettings, systemInstruction, or chunkedPrompt found");
+        messages.push(Message::system(text));
+    }
+    let chunks = root
+        .chunked_prompt
+        .as_ref()
+        .map(|prompt| prompt.chunks.as_slice())
+        .unwrap_or(&[]);
+    messages.extend(build_messages(chunks));
+
+    Conversation {
+        title: title.to_string(),
+        model,
+        time_secs,
+        sort_ms: None,
+        url: None,
+        extra,
+        group: None,
+        id: None,
+        messages,
+    }
+}
+
+/// 相邻同角色 chunk 合并成一条消息：`isThought` 归思维链，其余归正文。
+/// 未知角色一律兜底成 Assistant（契约 §4.2）。
+fn build_messages(chunks: &[Chunk]) -> Vec<Message> {
+    let mut messages: Vec<Message> = Vec::new();
+    let mut cursor = 0;
+
+    while cursor < chunks.len() {
+        let role = normalize_role(&chunks[cursor].role);
+        let mut thinking: Vec<String> = Vec::new();
+        let mut body: Vec<String> = Vec::new();
+
+        while cursor < chunks.len() && normalize_role(&chunks[cursor].role) == role {
+            let chunk = &chunks[cursor];
+            if let Some(text) = chunk
+                .text
+                .as_deref()
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
+            {
+                if role == Role::Assistant && chunk.is_thought {
+                    thinking.push(text.to_string());
+                } else {
+                    body.push(text.to_string());
+                }
+            }
+            cursor += 1;
+        }
+
+        if thinking.is_empty() && body.is_empty() {
+            continue;
+        }
+        messages.push(Message {
+            role,
+            thinking,
+            body,
+        });
     }
 
-    // --- Generate Markdown Content ---
-    let mut markdown_lines = Vec::new();
+    messages
+}
 
-    // Add Title
-    let title = format!(
-        "Conversation Transcript: {}",
-        input_json_path.file_stem().map_or_else(
-            || "Unknown".to_string(), // Fallback if no file stem
-            |stem| stem.to_string_lossy().into_owned()
-        )
-    );
-    markdown_lines.push(title);
-    markdown_lines.push("".to_string());
-
-    // Add Metadata Section
-    let metadata_md = format_metadata(&root);
-    if !metadata_md.is_empty() {
-        markdown_lines.extend(metadata_md);
-        // Add extra space only if conversation follows and metadata was added
-        if root
-            .chunked_prompt
-            .as_ref()
-            .map_or(false, |p| !p.chunks.is_empty())
-        {
-            markdown_lines.push("".to_string());
-        }
+fn normalize_role(role: &str) -> Role {
+    if role.eq_ignore_ascii_case("user") {
+        Role::User
+    } else {
+        Role::Assistant
     }
+}
 
-    // Add Conversation Section
-    let conversation_md = format_conversation(&root);
-    markdown_lines.extend(conversation_md);
+// ═══════════════════════════════════════════════════════════
+//  IO
+// ═══════════════════════════════════════════════════════════
 
-    // --- Prepare Final Output String ---
-    let mut final_content = markdown_lines.join("\n");
-
-    // Optional: Clean up multiple consecutive blank lines using regex
-    // This regex replaces 3 or more newlines with exactly 2 newlines
-    match Regex::new(r"\n{3,}") {
-        Ok(re) => {
-            final_content = re.replace_all(&final_content, "\n\n").to_string();
-            final_content = final_content.trim().to_string(); // Trim leading/trailing whitespace
-        }
-        Err(e) => {
-            error!("Failed to compile regex for cleaning newlines: {}", e);
-            // Proceed without regex cleaning if it fails
-            final_content = final_content.trim().to_string();
-        }
-    };
-
-    // --- Write Markdown File ---
-    fs::write(&output_md_path, final_content + "\n") // Ensure trailing newline
-        .with_context(|| {
-            format!(
-                "Failed to write Markdown file: {}",
-                output_md_path.display()
-            )
-        })?;
-
-    info!(
-        "Markdown file successfully generated: {}",
-        output_md_path.display()
-    );
-
-    let input_metadata = fs::metadata(&input_json_path).with_context(|| {
-        format!(
-            "Failed to read metadata for source file: {}",
-            input_json_path.display()
-        )
-    })?;
-
-    let atime = FileTime::from_last_access_time(&input_metadata);
-    let mtime = FileTime::from_last_modification_time(&input_metadata);
-
-    if let Err(e) = set_file_times(&output_md_path, atime, mtime) {
-        warn!(
-            "Failed to set timestamps for {}: {}. The file was created successfully.",
-            output_md_path.display(),
-            e
+fn load_json(path: &Path) -> Result<Root> {
+    let raw = fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+    // ChatFormat 允许 UTF-8 BOM，serde_json 不接受，先剥掉。
+    let root: Root = serde_json::from_str(raw.trim_start_matches('\u{feff}'))
+        .with_context(|| format!("failed to parse JSON in {}", path.display()))?;
+    if !root.looks_like_export() {
+        bail!(
+            "not a Google AI Studio export (no runSettings / systemInstruction / chunkedPrompt): {}",
+            path.display()
         );
     }
+    Ok(root)
+}
 
-    info!(
-        "Markdown file successfully generated: {}",
-        output_md_path.display()
-    );
+fn file_mtime_secs(path: &Path) -> Option<i64> {
+    let modified = fs::metadata(path).ok()?.modified().ok()?;
+    modified
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|delta| delta.as_secs() as i64)
+}
+
+fn copy_times(target: &Path, source: &Path) {
+    let Ok(metadata) = fs::metadata(source) else {
+        return;
+    };
+    let atime = FileTime::from_last_access_time(&metadata);
+    let mtime = FileTime::from_last_modification_time(&metadata);
+    if let Err(err) = set_file_times(target, atime, mtime) {
+        warn!("failed to set timestamps on {}: {err}", target.display());
+    }
+}
+
+fn ensure_parent(path: &Path) -> Result<()> {
+    if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
     Ok(())
 }
 
-// --- Main Application Logic ---
-fn main() -> Result<()> {
-    // Using anyhow::Result for easy error propagation
-    // Initialize logger - RUST_LOG=info cargo run ...
-    env_logger::init();
+fn is_markdown(path: &Path) -> bool {
+    path.extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case("md"))
+}
 
-    // Parse command line arguments using clap
-    let args = Args::parse();
+fn is_json(path: &Path) -> bool {
+    path.extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case("json"))
+}
 
-    let input_path = &args.json_path; // Use a shorter name for clarity
-    let input_metadata: fs::Metadata = fs::metadata(input_path).with_context(|| {
-        format!(
-            "Failed to read metadata for input: {}",
-            input_path.display()
-        )
-    })?;
+fn default_stem(path: &Path) -> String {
+    path.file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .filter(|stem| !stem.trim().is_empty())
+        .unwrap_or_else(|| "conversation".to_string())
+}
 
-    // --- Handle based on Input Type (File or Directory) ---
+fn convert_file(input: &Path) -> Result<Root> {
+    load_json(input)
+}
 
-    if input_metadata.is_file() {
-        // --- Determine Output Path for Single File ---
-        let output_path = match args.output {
-            Some(path) => path,
-            None => {
-                // Default to same directory with .md extension
-                let mut default_path = input_path.clone();
-                if !default_path.set_extension("md") {
-                    // Handle case where input path might not have a filename or extension
-                    let filename = input_path
-                        .file_name()
-                        .map(|name| name.to_string_lossy().into_owned() + ".md")
-                        .unwrap_or_else(|| "output.md".to_string());
-                    default_path = input_path.join(filename);
-                }
-                info!(
-                    "Output path not specified. Using default: {}",
-                    default_path.display()
-                );
-                default_path
-            }
-        };
+fn render_to(root: &Root, source: &Path) -> String {
+    let title = default_stem(source);
+    let conversation = to_conversation(root, &title, file_mtime_secs(source));
+    conversation.render()
+}
 
-        // --- Ensure Output Directory Exists ---
-        if let Some(parent_dir) = output_path.parent() {
-            // Check if it exists *and* is a directory
-            if !parent_dir.is_dir() {
-                fs::create_dir_all(parent_dir).with_context(|| {
-                    format!("Could not create output directory {}", parent_dir.display())
-                })?;
-            }
-        } else {
-            info!("Output path has no parent directory, assuming current directory.");
+fn output_for_single(input: &Path, output: Option<&Path>) -> Result<PathBuf> {
+    match output {
+        Some(path) if is_markdown(path) => Ok(path.to_path_buf()),
+        Some(dir) => {
+            fs::create_dir_all(dir)
+                .with_context(|| format!("failed to create output dir {}", dir.display()))?;
+            let name = sanitize_filename_with(&default_stem(input), SINGLE_NAME_MAX, "Untitled_Conversation");
+            Ok(dir.join(format!("{name}.md")))
         }
+        None => Ok(input.with_extension("md")),
+    }
+}
 
-        converter(input_path, &output_path).with_context(|| {
-            format!(
-                "Failed to convert single file: {} -> {}. Maybe something error.", // Kept your original message hint
-                input_path.display(),
-                output_path.display()
-            )
-        })?;
-    } else if input_metadata.is_dir() {
-        // --- Determine Output Base Directory ---
-        let output_base_dir: Option<PathBuf> = match args.output {
-            Some(path) => {
-                if !path.is_dir() {
-                    // Check if it exists *and* is a directory
-                    fs::create_dir_all(&path).with_context(|| {
-                        format!("Could not create output directory {}", path.display())
-                    })?;
-                }
-                info!("Outputting to directory: {}", path.display());
-                Some(path.clone())
-            }
-            None => {
-                // Output alongside original files
-                info!("Output directory not specified. Files will be generated alongside originals with .md extension.");
+fn output_for_tree_member(input_root: &Path, file: &Path, output: Option<&Path>) -> Result<PathBuf> {
+    match output {
+        Some(base) => {
+            let relative = file
+                .strip_prefix(input_root)
+                .with_context(|| format!("{} is not under {}", file.display(), input_root.display()))?;
+            let mut target = base.join(relative);
+            target.set_extension("md");
+            Ok(target)
+        }
+        None => Ok(file.with_extension("md")),
+    }
+}
+
+fn run(input: &Path, output: Option<&Path>) -> Result<usize> {
+    if !input.exists() {
+        bail!("input path does not exist: {}", input.display());
+    }
+
+    if input.is_file() {
+        let root = convert_file(input)?;
+        let target = output_for_single(input, output)?;
+        ensure_parent(&target)?;
+        fs::write(&target, render_to(&root, input))
+            .with_context(|| format!("failed to write {}", target.display()))?;
+        copy_times(&target, input);
+        info!("wrote {}", target.display());
+        return Ok(1);
+    }
+
+    if !input.is_dir() {
+        bail!("input must be a JSON file or a directory: {}", input.display());
+    }
+
+    let mut files: Vec<PathBuf> = WalkDir::new(input)
+        .into_iter()
+        .filter_map(|entry| match entry {
+            Ok(entry) => Some(entry),
+            Err(err) => {
+                warn!("error walking directory: {err}");
                 None
             }
-        };
+        })
+        .filter(|entry| entry.file_type().is_file())
+        .map(|entry| entry.into_path())
+        .filter(|path| is_json(path))
+        .collect();
+    files.sort();
 
-        // --- Collect Files Recursively (using walkdir) ---
-        // We collect paths first to easily feed them into Rayon.
-        let files_to_process: Vec<PathBuf> = WalkDir::new(input_path)
-            .into_iter()
-            .filter_map(|entry_result| {
-                // Log errors accessing directory entries, but skip them
-                match entry_result {
-                    Ok(entry) => Some(entry),
-                    Err(e) => {
-                        warn!("Error accessing entry during directory walk: {}", e);
-                        None
-                    }
-                }
-            })
-            .filter(|entry| entry.file_type().is_file()) // Only process files
-            .map(|entry| entry.into_path())
-            .collect();
+    let results: Vec<Result<PathBuf>> = files
+        .par_iter()
+        .map(|source| {
+            let root = load_json(source)?;
+            let target = output_for_tree_member(input, source, output)?;
+            ensure_parent(&target)?;
+            fs::write(&target, render_to(&root, source))
+                .with_context(|| format!("failed to write {}", target.display()))?;
+            copy_times(&target, source);
+            Ok(target)
+        })
+        .collect();
 
-        info!(
-            "Found {} potential files to process in directory.",
-            files_to_process.len()
-        );
-
-        // --- Process Files in Parallel (using rayon) ---
-        files_to_process
-            .par_iter() // Use parallel iterator
-            .for_each(|input_file_path| {
-                // Use a closure to handle errors for individual files cleanly
-                let result: Result<()> = (|| {
-                    // --- Calculate Output Path for Each File ---
-                    let output_md_path = match &output_base_dir {
-                        Some(base_dir) => {
-                            // Get relative path from input base dir
-                            let relative_path = input_file_path.strip_prefix(input_path).expect(
-                                "Internal error: file path should always be prefixed by input dir",
-                            ); // Should not fail if walkdir works correctly
-
-                            // Join with output base dir and set extension
-                            let mut target_path = base_dir.join(relative_path);
-                            target_path.set_extension("md"); // Handles replacing or adding extension
-                            target_path
-                        }
-                        None => {
-                            // Output alongside: Clone input path and set extension
-                            let mut target_path = input_file_path.clone();
-                            target_path.set_extension("md");
-                            target_path
-                        }
-                    };
-
-                    // --- Ensure Specific Output Directory Exists (for this file) ---
-                    // This is crucial for the directory output structure.
-                    if let Some(parent_dir) = output_md_path.parent() {
-                        if !parent_dir.is_dir() {
-                            // Avoid redundant calls if dir already exists
-                            // Note: Potential race condition if multiple threads try to create the same dir.
-                            // `create_dir_all` is generally idempotent, so it's usually okay.
-                            fs::create_dir_all(parent_dir).with_context(|| {
-                                format!(
-                                    "Could not create output directory for file: {}",
-                                    parent_dir.display()
-                                )
-                            })?;
-                        }
-                    }
-
-                    // --- Call Converter for This File ---
-                    converter(input_file_path, &output_md_path).with_context(|| {
-                        format!(
-                            "Error during conversion: {} -> {}",
-                            input_file_path.display(),
-                            output_md_path.display()
-                        )
-                    })?;
-                    // Optional: Log success per file (can be verbose)
-                    // info!("Successfully converted {} -> {}", input_file_path.display(), output_md_path.display());
-                    Ok(())
-                })(); // Immediately invoke the closure
-
-                // --- Log Individual File Errors ---
-                // Don't stop the whole process for one file error, just log it.
-                if let Err(e) = result {
-                    error!("Failed processing {}: {:?}", input_file_path.display(), e);
-                }
-            });
-
-        info!("Finished processing directory.");
+    let mut written = 0;
+    for result in results {
+        match result {
+            Ok(target) => {
+                written += 1;
+                info!("wrote {}", target.display());
+            }
+            Err(err) => error!("{err:#}"),
+        }
     }
 
-    Ok(())
+    info!("converted {written}/{} files under {}", files.len(), input.display());
+    Ok(written)
+}
+
+fn main() -> ExitCode {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let cli = Cli::parse();
+    match run(&cli.input, cli.output.as_deref()) {
+        Ok(_) => ExitCode::SUCCESS,
+        Err(err) => {
+            error!("{err:#}");
+            ExitCode::from(1)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(text: &str) -> Root {
+        serde_json::from_str(text).expect("should parse")
+    }
+
+    #[test]
+    fn renders_contract_skeleton() {
+        let root = parse(
+            r##"{
+                "runSettings": {"model": "gemini-2.5-pro", "temperature": 1, "topP": 0.95},
+                "systemInstruction": {"text": "# 你是助手"},
+                "chunkedPrompt": {"chunks": [
+                    {"role": "user", "text": "# 问题"},
+                    {"role": "model", "text": "想想", "isThought": true},
+                    {"role": "model", "text": "答案"}
+                ]}
+            }"##,
+        );
+        let conversation = to_conversation(&root, "sample", Some(1_725_891_751));
+        let markdown = conversation.render();
+
+        assert!(markdown.starts_with("## Metadata\n"), "{markdown}");
+        assert!(!markdown.contains("Conversation Transcript"), "{markdown}");
+        assert!(markdown.contains("- **Model:** `gemini-2.5-pro`\n"), "{markdown}");
+        assert!(markdown.contains("- **Time:** 2024-"), "{markdown}");
+        assert!(markdown.contains("- **Temperature:** `1`\n"), "{markdown}");
+        assert!(markdown.contains("- **Top P:** `0.95`\n"), "{markdown}");
+        assert!(markdown.contains("### ⚙️ System\n\n**你是助手**\n"), "{markdown}");
+        assert!(markdown.contains("### 🧑‍💻 User\n\n**问题**\n"), "{markdown}");
+        assert!(markdown.contains("#### 🤔 Thought Process\n\n想想\n"), "{markdown}");
+        assert!(markdown.contains("#### 💡 Response\n\n答案\n"), "{markdown}");
+    }
+
+    #[test]
+    fn merges_consecutive_blocks_and_skips_empty() {
+        let chunks = vec![
+            Chunk { text: None, role: "user".into(), is_thought: false },
+            Chunk { text: Some("a".into()), role: "model".into(), is_thought: true },
+            Chunk { text: Some("b".into()), role: "model".into(), is_thought: true },
+            Chunk { text: Some("c".into()), role: "model".into(), is_thought: false },
+        ];
+        let messages = build_messages(&chunks);
+        assert_eq!(messages.len(), 1, "{messages:?}");
+        assert_eq!(messages[0].thinking, vec!["a", "b"]);
+        assert_eq!(messages[0].body, vec!["c"]);
+    }
+
+    #[test]
+    fn unknown_role_falls_back_to_assistant() {
+        let chunks = vec![Chunk {
+            text: Some("x".into()),
+            role: "system".into(),
+            is_thought: false,
+        }];
+        let messages = build_messages(&chunks);
+        assert_eq!(messages[0].role, Role::Assistant);
+    }
+
+    #[test]
+    fn no_thinking_means_no_response_heading() {
+        let root = parse(
+            r#"{"chunkedPrompt": {"chunks": [
+                {"role": "user", "text": "q"},
+                {"role": "model", "text": "a"}
+            ]}}"#,
+        );
+        let markdown = to_conversation(&root, "t", None).render();
+        assert!(!markdown.contains("#### 💡 Response"), "{markdown}");
+        assert!(!markdown.contains("#### 🤔 Thought Process"), "{markdown}");
+        assert!(markdown.contains("### 🤖 Assistant\n\na\n"), "{markdown}");
+        assert!(!markdown.contains("- **Time:**"), "{markdown}");
+    }
 }

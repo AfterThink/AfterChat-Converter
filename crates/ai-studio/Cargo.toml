@@ -1,20 +1,25 @@
 [package]
 name = "afterchat-ai-studio"
-version = "0.3.0"
-edition = "2021"
+version = "0.4.0"
+edition = "2024"
 
 [[bin]]
 name = "ai-studio"
 path = "src/main.rs"
 
 [dependencies]
+anyhow = "1.0"
+chatformat = { package = "afterchat-chatformat", path = "../chatformat" }
 clap = { version = "4.4", features = ["derive"] }
+env_logger = "0.11"
+filetime = "0.2"
+log = "0.4"
+rayon = "1.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-log = "0.4"
-env_logger = "0.11.8"
-anyhow = "1.0"
-regex = "1.10"
-walkdir = "2.5.0"
-rayon = "1.10.0"
-filetime = "0.2.25"
+walkdir = "2.5"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+tempfile = "3.10"
