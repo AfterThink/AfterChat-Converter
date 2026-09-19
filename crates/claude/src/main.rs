@@ -11,13 +11,13 @@ use afterchat_claude::{ConvertOptions, run_conversion};
 #[command(
     name = "claude",
     version,
-    about = "Convert Claude export JSON into markdown conversations"
+    about = "Convert Claude export (ZIP/JSON) into an AfterChat conversation ZIP"
 )]
 struct Cli {
-    /// Input file (JSON or ZIP) or directory
+    /// Input ZIP, JSON, or directory
     input: PathBuf,
 
-    /// Output path (Markdown file or directory)
+    /// Output directory, or an explicit `.zip` path
     #[arg(short, long)]
     output: Option<PathBuf>,
 }
@@ -45,19 +45,19 @@ fn run(cli: Cli) -> anyhow::Result<ExitCode> {
     })?;
 
     info!(
-        "converted {} -> {} markdown files ({} failed files)",
+        "converted {} -> {} conversations ({} skipped)",
         cli.input.display(),
-        summary.generated_files,
-        summary.failed_files
+        summary.conversations,
+        summary.failed
     );
 
-    if let Some(error_log) = summary.error_log {
-        warn!("errors were logged to {}", error_log.display());
+    if let Some(output) = &summary.output {
+        info!("wrote {}", output.display());
     }
 
-    if summary.failed_files > 0 {
-        Ok(ExitCode::from(1))
-    } else {
-        Ok(ExitCode::SUCCESS)
+    if summary.failed > 0 {
+        warn!("{0} conversation(s) were skipped; see export-failures.md", summary.failed);
     }
+
+    Ok(ExitCode::SUCCESS)
 }

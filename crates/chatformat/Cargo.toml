@@ -1,0 +1,18 @@
+[package]
+name = "afterchat-chatformat"
+version = "0.1.0"
+edition = "2024"
+description = "AfterChat ChatFormat 的公共实现：转义、渲染、命名与 ZIP 打包"
+
+[lib]
+name = "chatformat"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+indicatif = "0.17"
+log = "0.4"
+rayon = "1.10"
+serde_json = "1.0"
+zip = { version = "2", default-features = false, features = ["deflate"] }

@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/chatformat",
     "crates/ai-studio",
     "crates/cherry",
     "crates/qwen",
