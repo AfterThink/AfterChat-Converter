@@ -7,95 +7,113 @@
   <img src="https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows" alt="Windows" />
 </p>
 
-把各主流 AI 平台的**对话备份**解析并转换为统一规范的 **AfterChat Markdown / ZIP** 格式，用于本地归档、数据迁移与离线阅读。
+<p align="center">
+  <strong>English</strong> | <a href="README_zh.md">简体中文</a>
+</p>
 
-支持 **5 种备份来源**：Google AI Studio、Cherry Studio、Qwen、Claude 与 RikkaHub。生成的 Markdown 文档可直接导入 [AfterChat](https://github.com/AfterThink/AfterChat-App-Download) 工作区。
+Convert conversation backups from various AI platforms into standardized **AfterChat Markdown / ZIP** archives for local storage, migration, and offline reading.
 
-> 在线对话可通过 [AfterChat — LLM Chat Exporter](https://github.com/AfterThink/AfterChat-Script) 导出；本地已有的备份文件则通过本工具进行转换。
+Supports **5 backup sources**: Google AI Studio, Cherry Studio, Qwen, Claude, and RikkaHub. Generated Markdown documents can be directly imported into the [AfterChat](https://github.com/AfterThink/AfterChat-App-Download) workspace.
 
-## 支持的备份
+---
 
-| 来源 | 输入 | 输出 |
+## The AfterChat Workflow Ecosystem
+
+AfterChat Converter is an integral component of the AfterChat conversational data ecosystem, providing a complete end-to-end pipeline:
+
+1. **Capture**:
+   - **Web Sessions**: Export online chats seamlessly via the [AfterChat — LLM Chat Exporter (Script)](https://github.com/AfterThink/AfterChat-Script) browser extension.
+   - **Offline Archives**: Batch convert historical backups and client databases into standardized formats using **AfterChat-Converter**.
+2. **Normalize & Store**:
+   - Standardized against the [ChatFormat Specification](./docs/CHATFORMAT.md), preserving chain-of-thought reasoning, metadata, and timestamps without loss of syntax.
+3. **Discover & Manage**:
+   - Import into the [AfterChat Desktop App](https://github.com/AfterThink/AfterChat-App-Download) for local knowledge base construction, semantic search, offline browsing, and multi-dimensional organization.
+
+---
+
+## Supported Backups
+
+| Source | Input | Output |
 | --- | --- | --- |
-| Google AI Studio | 导出的 JSON | Markdown（单文件，或目录树） |
-| Cherry Studio | 备份 ZIP | Markdown ZIP |
-| Qwen | 网页版导出的 JSON | Markdown ZIP |
-| Claude | 数据导出 ZIP | Markdown ZIP |
-| RikkaHub | 备份 ZIP | Markdown ZIP |
+| Google AI Studio | Exported JSON | Markdown (Single file or directory tree) |
+| Cherry Studio | Backup ZIP | Markdown ZIP |
+| Qwen | Web exported JSON | Markdown ZIP |
+| Claude | Data export ZIP | Markdown ZIP |
+| RikkaHub | Backup ZIP | Markdown ZIP |
 
-转换后的结构示例：
+Example output structure:
 
 ```
 chat-export-claude-all-1730000000000.zip
-├── 20241114-101500-第一次对话.md
-├── 20241113-090000-第二次对话.md
-└── export-failures.md          # 无法解析或无有效消息的对话记录在此
+├── 20241114-101500-First_Conversation.md
+├── 20241113-090000-Second_Conversation.md
+└── export-failures.md          # Recorded here if a session contains no exportable messages
 ```
 
-按助手分目录的平台（Cherry / Qwen / RikkaHub）会生成分组子目录：
+Platforms grouping by assistant (Cherry / Qwen / RikkaHub) include a subfolder:
 
 ```
 chat-export-rikka-all-1730000000000.zip
 └── Gemini/
-    └── 20241114-101500-第一次对话.md
+    └── 20241114-101500-First_Conversation.md
 ```
 
-## 下载
+## Downloads
 
-访问 [Releases](https://github.com/AfterThink/AfterChat-Converter/releases) 下载预编译版本：
+Visit [Releases](https://github.com/AfterThink/AfterChat-Converter/releases) to download pre-built binaries:
 
-| 文件 | 说明 |
+| File | Description |
 | --- | --- |
-| `afterchat-converter_<版本>_x64-setup.exe` | 安装版：桌面应用（含开始菜单快捷方式与卸载程序） |
-| `afterchat-converter-<版本>-windows-x64.zip` | 绿色免安装版：解压后运行 `afterchat-converter.exe` 即可使用 |
+| `afterchat-converter_<version>_x64-setup.exe` | Installer: Desktop application (includes Start Menu shortcut and uninstaller) |
+| `afterchat-converter-<version>-windows-x64.zip` | Portable: Extract and run `afterchat-converter.exe` directly |
 
-## 使用方法
+## Usage
 
-### 桌面应用
+### Desktop Application
 
-1. 打开应用，将备份文件（或包含备份的文件夹）拖入窗口；
-2. 程序根据文件特征自动匹配对应的转换器；
-3. 转换完成后，导出的 `chat-export-<平台>-all-<时间戳>.zip` 默认保存在源文件同级目录下。
+1. Launch the application and drag backup files (or folders) into the window.
+2. The application automatically routes the file to the corresponding converter based on file attributes.
+3. Upon completion, `chat-export-<platform>-all-<timestamp>.zip` is saved alongside the source file.
 
-可在窗口底部勾选「输出到自定义目录」。详细支持格式与路由规则参见 [docs/GUI.md](./docs/GUI.md)。
+You can check "Output to custom directory" at the bottom of the window to select an alternative destination. See [docs/GUI.md](./docs/GUI.md) for details.
 
-### 命令行工具
+### Command-Line Interface (CLI)
 
-安装包或免安装压缩包中均包含以下 5 个独立可执行文件：
+Both the installer and portable archive contain 5 standalone executable binaries:
 
 ```powershell
-rikka     RikkaHub-backup.zip        # RikkaHub 备份（自动读取压缩包内的 SQLite 数据库）
-cherry    cherry-backup.zip          # Cherry Studio 备份
-qwen      qwen-all.json              # Qwen 导出（支持传入多个文件）
-claude    data-export.zip            # Claude 数据导出包
-ai-studio prompt.json                # Google AI Studio 导出文件
+rikka     RikkaHub-backup.zip        # RikkaHub backup (automatically extracts and reads SQLite DB)
+cherry    cherry-backup.zip          # Cherry Studio backup
+qwen      qwen-all.json              # Qwen export (supports multiple files)
+claude    data-export.zip            # Claude data export archive
+ai-studio prompt.json                # Google AI Studio export file
 ```
 
-默认输出至**源文件同级目录**，亦可通过 `-o` 选项指定输出目录或输出文件名：
+Outputs are saved in the source directory by default. Use `-o` to specify an output directory or file name:
 
 ```powershell
-rikka backup.zip -o out\              # 输出至 out\chat-export-rikka-all-<时间戳>.zip
-rikka backup.zip -o out\my-name.zip   # 显式指定 ZIP 文件名
+rikka backup.zip -o out\              # Writes to out\chat-export-rikka-all-<timestamp>.zip
+rikka backup.zip -o out\my-name.zip   # Explicitly specifies the ZIP filename
 ```
 
-亦可直接将文件拖拽至单个可执行文件图标上运行（`ai-studio` 默认输出单文件 Markdown，建议通过命令行运行）。
+Files can also be directly dropped onto individual executable icons in File Explorer (`ai-studio` outputs single Markdown files and is best run via CLI).
 
-## 特性
+## Features
 
-- **统一输出规范**：各转换器输出结构高度一致。
-- **异常会话汇总**：无有效消息的空会话不会生成空文件，而是统一汇总至包内的 `export-failures.md`。
-- **容错处理**：单个会话解析失败不影响批处理中其他会话的转换，进程正常退出。
+- **Unified Output Contract**: All converters adhere strictly to the [ChatFormat Specification](./docs/CHATFORMAT.md).
+- **Reasoning Process Preservation**: Thought processes and final responses are cleanly separated as `#### 🤔 Thought Process` and `#### 💡 Response`.
+- **Empty Session Aggregation**: Sessions without exportable messages are aggregated into `export-failures.md` instead of creating empty files.
+- **Fault-Tolerant Processing**: Failure of an individual session does not interrupt the batch conversion process.
 
+## Building from Source
 
-## 构建
-
-构建环境要求：Rust (stable) 与 [Bun](https://bun.sh/)：
+Prerequisites: Rust (stable) and [Bun](https://bun.sh/):
 
 ```powershell
-# 编译 5 个命令行转换器
+# Build 5 CLI converters
 cargo build --release
 
-# 编译桌面应用（会自动将转换器作为 sidecar 一同打包）
+# Build desktop application (sidecars are compiled and packaged automatically)
 cd gui
 bun install
 bun run build
