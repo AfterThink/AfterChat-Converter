@@ -8,26 +8,12 @@
 </p>
 
 <p align="center">
-  <strong>English</strong> | <a href="README_zh.md">简体中文</a>
+  <strong>English</strong> | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
 Convert conversation backups from various AI platforms into standardized **AfterChat Markdown / ZIP** archives for local storage, migration, and offline reading.
 
 Supports **5 backup sources**: Google AI Studio, Cherry Studio, Qwen, Claude, and RikkaHub. Generated Markdown documents can be directly imported into the [AfterChat](https://github.com/AfterThink/AfterChat-App-Download) workspace.
-
----
-
-## The AfterChat Workflow Ecosystem
-
-AfterChat Converter is an integral component of the AfterChat conversational data ecosystem, providing a complete end-to-end pipeline:
-
-1. **Capture**:
-   - **Web Sessions**: Export online chats seamlessly via the [AfterChat — LLM Chat Exporter (Script)](https://github.com/AfterThink/AfterChat-Script) browser extension.
-   - **Offline Archives**: Batch convert historical backups and client databases into standardized formats using **AfterChat-Converter**.
-2. **Normalize & Store**:
-   - Standardized against the [ChatFormat Specification](./docs/CHATFORMAT.md), preserving chain-of-thought reasoning, metadata, and timestamps without loss of syntax.
-3. **Discover & Manage**:
-   - Import into the [AfterChat Desktop App](https://github.com/AfterThink/AfterChat-App-Download) for local knowledge base construction, semantic search, offline browsing, and multi-dimensional organization.
 
 ---
 
@@ -100,7 +86,7 @@ Files can also be directly dropped onto individual executable icons in File Expl
 
 ## Features
 
-- **Unified Output Contract**: All converters adhere strictly to the [ChatFormat Specification](./docs/CHATFORMAT.md).
+- **Unified Output Contract**: All converters adhere strictly to the [AfterChat-Format Specification](./docs/CHATFORMAT.md).
 - **Reasoning Process Preservation**: Thought processes and final responses are cleanly separated as `#### 🤔 Thought Process` and `#### 💡 Response`.
 - **Empty Session Aggregation**: Sessions without exportable messages are aggregated into `export-failures.md` instead of creating empty files.
 - **Fault-Tolerant Processing**: Failure of an individual session does not interrupt the batch conversion process.
@@ -118,3 +104,27 @@ cd gui
 bun install
 bun run build
 ```
+
+## The AfterChat Workflow Ecosystem
+
+AfterChat Converter is an integral component of the AfterChat conversational data ecosystem, providing a complete end-to-end pipeline:
+
+```mermaid
+flowchart LR
+    A["Web Conversations<br/>(ChatGPT / Claude / Gemini / DeepSeek, 28+ sites)"] -->|Live Capture & Incremental Export| B["AfterChat-Script<br/>(Browser Userscript)"]
+    C["Historical Exports / Third-Party Apps<br/>(Google AI Studio / Cherry Studio / Official dumps)"] -->|Offline Migration & Normalization| D["AfterChat-Converter<br/>(This Tool / Rust Core)"]
+    B -->|Standard AfterChat-Format Markdown| E["AfterChat Desktop Workspace<br/>(Local Filesystem / SQLite / Knowledge Base)"]
+    D -->|Standard AfterChat-Format Markdown| E
+```
+
+1. **Capture**:
+   - **Web Sessions**: Export online chats seamlessly via the [AfterChat — LLM Chat Exporter (Script)](https://github.com/AfterThink/AfterChat-Script) browser extension.
+   - **Offline Archives**: Batch convert historical backups and client databases into standardized formats using **AfterChat-Converter** (this tool).
+2. **Normalize & Store**:
+   - Standardized against the [AfterChat-Format Specification](./docs/CHATFORMAT.md), preserving chain-of-thought reasoning, metadata, and timestamps without loss of syntax.
+3. **Discover & Manage**:
+   - Import into the [AfterChat Desktop App](https://github.com/AfterThink/AfterChat-App-Download) for local knowledge base construction, semantic search, offline browsing, and multi-dimensional organization.
+
+## License
+
+This project is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).

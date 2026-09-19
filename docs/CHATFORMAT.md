@@ -1,8 +1,20 @@
-# ChatFormat 规范契约
+# AfterChat-Format 规范 (AfterChat-Format Specification RFC)
 
-> 本规范完整定义了 AfterChat 对话导出的 Markdown 与 ZIP 打包格式标准，供各平台转换器实现参考。
+> **版本**：1.0.0-draft
+> **状态**：AfterChat 生态统一标准 (Active)  
+> **定位**：大语言模型（LLM）对话导出、交换与本地归档规范。
 >
-> 适用场景：将各平台的对话备份数据（JSON / SQLite / ZIP）转换为统一规范的 AfterChat Markdown 与 ZIP 归档包。
+> 本规范完整定义了 AfterChat 生态中 LLM 对话的 Markdown 表示结构与 ZIP 打包归档格式，是所有导出端、转换端与消费端遵循的单一事实来源（Single Source of Truth）。
+
+---
+
+## 生态参考实现与角色映射
+
+| 角色 | 组件 / 项目 | 语言 / 技术栈 | 职责 |
+|---|---|---|---|
+| **导出端 (Web Capture)** | [AfterChat-Script](https://github.com/AfterThink/AfterChat-Script) | JavaScript / TypeScript | 浏览器端在线会话抓取，直接输出符合本规范的 Markdown 与 ZIP |
+| **转换端 (Offline Migration)** | [AfterChat-Converter](https://github.com/AfterThink/AfterChat-Converter) | Rust (`crates/afterchat-chatformat`) | 离线历史备份解析与批量转换，提供公共的规范渲染与打包库 |
+| **消费端 (Workspace & Reader)** | [AfterChat Desktop App](https://github.com/AfterThink/AfterChat-App-Download) | — | 本地存储、多维语义检索、离线阅读与工作区组织 |
 
 ---
 
@@ -10,11 +22,11 @@
 
 | | 输入 | 输出 |
 |---|---|---|
-| 单个会话 | 单个 JSON 文件 | 单个 `.md` 文件 |
-| 批量导出（含多个会话） | 单个 JSON 文件 / 压缩包 | 单个 `.zip` 文件（内含多个 `.md`） |
+| 单个会话 | 单个会话数据源 | 单个 `.md` 文件 |
+| 批量导出（含多个会话） | 备份文件 / 数据库 / 压缩包 | 单个 `.zip` 文件（内含多个 `.md`） |
 
 各平台的差异仅存在于**输入数据的解析逻辑**（提取会话、消息体、角色及时间戳）。
-**输出的 Markdown 格式与打包规范对所有平台完全统一**，转换器实现必须严格遵循第 1 至第 7 节的规范。
+**输出的 Markdown 格式与打包规范对所有平台及所有实现端完全统一**，转换器与导出脚本必须严格遵循第 1 至第 7 节的规范。
 
 > **输入读取建议**：部分平台的导出产物为内含数据文件的 ZIP 压缩包（路径层级不固定且可能包含 BOM）。
 > 建议直接在内存或流式读取压缩包内部条目，避免解压到磁盘，以提升处理性能并规避路径遍历等安全风险。若包含 UTF-8 BOM 须主动剔除。

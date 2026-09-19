@@ -17,20 +17,6 @@
 
 ---
 
-## AfterChat 数据工作流生态
-
-本工具是 AfterChat 对话数据生态的重要组成部分，与周边工具协同构成完整闭环：
-
-1. **采集 (Capture)**：
-   - **在线网页端**：通过 [AfterChat — LLM Chat Exporter (Script)](https://github.com/AfterThink/AfterChat-Script) 浏览器扩展，一键导出各网页对话；
-   - **离线历史备份**：通过本工具 **AfterChat-Converter**，将主流客户端及平台的历史备份批量转换为标准格式。
-2. **规范化存储 (Store & Organize)**：
-   - 统一遵循 [ChatFormat 契约规范](./docs/CHATFORMAT.md)，完整保留思考过程（Reasoning/Thinking）、元数据与消息时序。
-3. **价值挖掘与检索 (Value Discovery)**：
-   - 导入 [AfterChat 桌面端](https://github.com/AfterThink/AfterChat-App-Download)，进行本地知识库构建、语义检索、离线阅读与多维管理。
-
----
-
 ## 支持的备份
 
 | 来源 | 输入 | 输出 |
@@ -100,7 +86,7 @@ rikka backup.zip -o out\my-name.zip   # 显式指定 ZIP 文件名
 
 ## 特性
 
-- **统一输出规范**：各转换器输出结构高度一致，严格遵循 [ChatFormat](./docs/CHATFORMAT.md)；
+- **统一输出规范**：各转换器输出结构高度一致，严格遵循 [AfterChat-Format](./docs/CHATFORMAT.md)；
 - **思维链保留**：区分思考过程与正文回复（`#### 🤔 Thought Process` 与 `#### 💡 Response`）；
 - **异常会话汇总**：无有效消息的空会话不会生成空文件，而是统一汇总至包内的 `export-failures.md`；
 - **容错处理**：单个会话解析失败不影响批处理中其他会话的转换，进程正常退出。
@@ -118,3 +104,28 @@ cd gui
 bun install
 bun run build
 ```
+
+## AfterChat 数据工作流生态
+
+本工具是 AfterChat 对话数据生态的重要组成部分，与周边工具协同构成完整闭环：
+
+```mermaid
+flowchart LR
+    A["Web 对话<br/>(ChatGPT / Claude / Gemini / DeepSeek 等 28+ 平台)"] -->|实时采集<br/>增量导出| B["AfterChat-Script<br/>(浏览器脚本 / 网页端)"]
+    C["历史导出包 / 第三方客户端<br/>(Google AI Studio / Cherry Studio / 官方导出等)"] -->|离线迁移<br/>格式归一化| D["AfterChat-Converter<br/>(本工具 / Rust 核心)"]
+    B -->|标准 AfterChat-Format Markdown| E["AfterChat 桌面工作区<br/>(本地文件系统 / 独立 SQLite / 知识库)"]
+    D -->|标准 AfterChat-Format Markdown| E
+```
+
+1. **采集**：
+   - **在线网页端**：通过 [AfterChat-Script](https://github.com/AfterThink/AfterChat-Script) 浏览器脚本，一键导出各网页对话；
+   - **离线历史备份**：通过本工具 **AfterChat-Converter**，将主流客户端及平台的历史备份批量转换为标准格式。
+2. **规范化存储**：
+   - 统一遵循 [AfterChat-Format 契约规范](./docs/CHATFORMAT.md)，完整保留思考过程（Reasoning/Thinking）、元数据与消息时序。
+3. **价值挖掘与检索**：
+   - 导入 [AfterChat 桌面端](https://github.com/AfterThink/AfterChat-App-Download)，进行本地知识库构建、语义检索、离线阅读与多维管理。
+
+
+## 开源许可证
+
+本项目基于 [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0) 许可证开源。
