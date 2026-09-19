@@ -88,13 +88,11 @@ dependencies = [
 name = "afterchat-qwen"
 version = "0.2.0"
 dependencies = [
+ "afterchat-chatformat",
  "anyhow",
- "chrono",
  "clap",
  "env_logger",
- "indicatif",
  "log",
- "rayon",
  "serde",
  "serde_json",
  "tempfile",
