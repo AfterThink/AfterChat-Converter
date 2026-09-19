@@ -5,7 +5,7 @@ use std::process::ExitCode;
 use clap::Parser;
 use env_logger::Env;
 use log::{error, info};
-use qwen_json_converter::{ConvertOptions, run_conversion};
+use afterchat_qwen::{ConvertOptions, run_conversion};
 
 #[derive(Debug, Parser)]
 #[command(

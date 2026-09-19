@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
-use rikkahub_db_converter::{ConvertOptions, run_conversion};
+use afterchat_rikka::{ConvertOptions, run_conversion};
 
 #[derive(Debug, Parser)]
 #[command(

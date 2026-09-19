@@ -1,10 +1,10 @@
 [workspace]
 resolver = "2"
 members = [
-    "converter/cherry",
-    "converter/ai-studio",
-    "converter/qwen",
-    "converter/claude",
-    "converter/rikka",
-    "converter/gui/src-tauri",
+    "crates/ai-studio",
+    "crates/cherry",
+    "crates/qwen",
+    "crates/claude",
+    "crates/rikka",
+    "gui/src-tauri",
 ]

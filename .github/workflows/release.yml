@@ -34,12 +34,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd converter/gui
+          cd gui
           bun install
 
       - name: Build with Tauri
         run: |
-          cd converter/gui
+          cd gui
           bun x tauri build --bundles nsis --ci -v
 
       - name: Collect artifacts

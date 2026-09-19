@@ -1,5 +1,5 @@
 [package]
-name = "google-ai-studio-json-converter"
+name = "afterchat-ai-studio"
 version = "0.3.0"
 edition = "2021"
 

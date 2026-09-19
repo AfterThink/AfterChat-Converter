@@ -6,18 +6,18 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const guiRoot = resolve(__dirname, "..");
-const repoRoot = resolve(guiRoot, "..", "..");
+const repoRoot = resolve(guiRoot, "..");
 const tauriBinDir = resolve(guiRoot, "src-tauri", "bin");
 const isRelease = process.argv.includes("--release");
 const profile = isRelease ? "release" : "debug";
 const exeSuffix = process.platform === "win32" ? ".exe" : "";
 
 const binaries = [
-  { pkg: "google-ai-studio-json-converter", bin: "ai-studio" },
-  { pkg: "cherry-studio-backup-json-converter", bin: "cherry" },
-  { pkg: "qwen-json-converter", bin: "qwen" },
-  { pkg: "claude-json-converter", bin: "claude" },
-  { pkg: "rikkahub-db-converter", bin: "rikka" },
+  { pkg: "afterchat-ai-studio", bin: "ai-studio" },
+  { pkg: "afterchat-cherry", bin: "cherry" },
+  { pkg: "afterchat-qwen", bin: "qwen" },
+  { pkg: "afterchat-claude", bin: "claude" },
+  { pkg: "afterchat-rikka", bin: "rikka" },
 ];
 
 mkdirSync(tauriBinDir, { recursive: true });

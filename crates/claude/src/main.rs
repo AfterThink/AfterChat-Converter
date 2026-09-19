@@ -5,11 +5,11 @@ use std::process::ExitCode;
 use clap::Parser;
 use env_logger::Env;
 use log::{error, info, warn};
-use claude_json_converter::{ConvertOptions, run_conversion};
+use afterchat_claude::{ConvertOptions, run_conversion};
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "claude-json-converter",
+    name = "claude",
     version,
     about = "Convert Claude export JSON into markdown conversations"
 )]
