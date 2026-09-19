@@ -1,11 +1,11 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/chatformat",
-    "crates/ai-studio",
-    "crates/cherry",
-    "crates/qwen",
-    "crates/claude",
-    "crates/rikka",
+    "crates/afterchat-chatformat",
+    "crates/afterchat-ai-studio",
+    "crates/afterchat-cherry",
+    "crates/afterchat-qwen",
+    "crates/afterchat-claude",
+    "crates/afterchat-rikka",
     "gui/src-tauri",
 ]

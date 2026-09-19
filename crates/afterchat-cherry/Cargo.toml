@@ -1,19 +1,22 @@
 [package]
-name = "afterchat-rikka"
-version = "0.1.0"
+name = "afterchat-cherry"
+version = "0.2.0"
 edition = "2024"
 
 [[bin]]
-name = "rikka"
+name = "cherry"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0"
-chatformat = { package = "afterchat-chatformat", path = "../chatformat" }
+chatformat = { package = "afterchat-chatformat", path = "../afterchat-chatformat" }
 clap = { version = "4.5", features = ["derive"] }
-rayon = "1.10"
-rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tempfile = "3"
+rayon = "1.10"
+chrono = "0.4"
+anyhow = "1.0"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+assert_cmd = "2.1.2"
+predicates = "3.1.4"

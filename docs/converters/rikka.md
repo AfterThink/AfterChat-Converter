@@ -248,7 +248,7 @@ rikka <INPUT> [-o <PATH>]
 - 渲染用 `rayon` 并行；ZIP 串行写入。首次编译会编 bundled SQLite。
 
 ```
-crates/rikka/
+crates/afterchat-rikka/
 ├── Cargo.toml
 ├── src/{main.rs, lib.rs}
 └── tests/integration_cli.rs

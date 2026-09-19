@@ -2,8 +2,8 @@
 
 本仓库把「**输入各家备份 → 输出统一 ChatFormat**」拆成两层：
 
-1. **`crates/chatformat`**：与平台无关的公共库。所有转换器都只负责「把自家 JSON/SQLite 映射成 `Conversation`」，剩下的渲染、命名、时间、ZIP 打包全部由它完成。
-2. **`crates/<platform>`**：各平台的解析器 + CLI，尽量只保留「读输入、抽字段」的逻辑。
+1. **`crates/afterchat-chatformat`**：与平台无关的公共库。所有转换器都只负责「把自家 JSON/SQLite 映射成 `Conversation`」，剩下的渲染、命名、时间、ZIP 打包全部由它完成。
+2. **`crates/afterchat-<platform>`**：各平台的解析器 + CLI，尽量只保留「读输入、抽字段」的逻辑。
 
 这样做的目的：5 个转换器输出的 Markdown 与 ZIP 结构**逐字节一致**，改契约时只动一个地方。
 
@@ -12,15 +12,15 @@
 ## 分层
 
 ```
-crates/chatformat       纯 lib，不读文件、不写文件（ZIP 写入除外，见 §6）
-  ├── lib.rs            数据模型 Conversation / Message / Role / MetadataLine + render()
-  ├── markdown.rs       契约 §5：# 标题 → **加粗**，代码围栏 / 行内代码保护
-  ├── naming.rs         契约 §7：非法字符清理、长度截断、路径段兜底
-  ├── time.rs           本地时间格式化、RFC3339 / epoch 解析、ZIP DOS 时间
-  └── zip.rs            契约 §6：排序、条目命名、重名 -2/-3、失败报告、mtime
+crates/afterchat-chatformat   纯 lib，不读文件、不写文件（ZIP 写入除外，见 §6）
+  ├── lib.rs                  数据模型 Conversation / Message / Role / MetadataLine + render()
+  ├── markdown.rs             契约 §5：# 标题 → **加粗**，代码围栏 / 行内代码保护
+  ├── naming.rs               契约 §7：非法字符清理、长度截断、路径段兜底
+  ├── time.rs                 本地时间格式化、RFC3339 / epoch 解析、ZIP DOS 时间
+  └── zip.rs                  契约 §6：排序、条目命名、重名 -2/-3、失败报告、mtime
 
-crates/<platform>       bin，只做输入解析 → Conversation
-gui/                    Tauri 桌面壳，sidecar 调用上面的 bin
+crates/afterchat-<platform>   bin，只做输入解析 → Conversation
+gui/                          Tauri 桌面壳，sidecar 调用上面的 bin
 ```
 
 ### chatformat 的数据模型
@@ -74,7 +74,7 @@ Role::{System, User, Assistant}
 
 ## 测试策略
 
-- `crates/chatformat`：单元测试覆盖转义、命名、时间、排序、重名、失败报告。
+- `crates/afterchat-chatformat`：单元测试覆盖转义、命名、时间、排序、重名、失败报告。
 - 每个转换器：`tests/integration_cli.rs` 用**合成 fixture**（不提交真实备份）跑一遍完整 CLI，断言 ZIP 条目名、排序、Metadata 与消息结构。
 - GUI：`gui/` 下的路由逻辑是纯 JS 分支，改动时以手动拖拽验证为主。
 

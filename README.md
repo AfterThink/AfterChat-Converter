@@ -9,14 +9,14 @@
 ```
 Cargo.toml            workspace 根
 crates/
-  chatformat/         输出契约的公共实现（纯 lib，无 I/O 副作用）
-  ai-studio/          Google AI Studio  → Markdown
-  cherry/             Cherry Studio     → Markdown ZIP
-  qwen/               Qwen 网页版       → Markdown ZIP
-  claude/             Claude            → Markdown ZIP
-  rikka/              RikkaHub (SQLite) → Markdown ZIP
-gui/                  Tauri + Bun 桌面 GUI（sidecar 调用上面的转换器）
-docs/                 契约、架构与各转换器说明
+  afterchat-chatformat/  输出契约的公共实现（纯 lib，无 I/O 副作用）
+  afterchat-ai-studio/   Google AI Studio  → Markdown
+  afterchat-cherry/      Cherry Studio     → Markdown ZIP
+  afterchat-qwen/        Qwen 网页版       → Markdown ZIP
+  afterchat-claude/      Claude            → Markdown ZIP
+  afterchat-rikka/       RikkaHub (SQLite) → Markdown ZIP
+gui/                     Tauri + Bun 桌面 GUI（sidecar 调用上面的转换器）
+docs/                    契约、架构与各转换器说明
 ```
 
 ## 转换器

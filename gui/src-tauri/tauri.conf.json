@@ -40,7 +40,7 @@
         "bin/claude",
         "bin/rikka"
       ],
-      "identifier": "com.openai.converters"
+      "identifier": "com.afterthink.afterchat-converter"
     },
     "security": {
       "csp": null

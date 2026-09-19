@@ -9,7 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0"
-chatformat = { package = "afterchat-chatformat", path = "../chatformat" }
+chatformat = { package = "afterchat-chatformat", path = "../afterchat-chatformat" }
 clap = { version = "4.5", features = ["derive"] }
 env_logger = "0.11"
 log = "0.4"

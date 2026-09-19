@@ -26,12 +26,12 @@
 
 | 路径 | 说明 |
 | --- | --- |
-| `crates/chatformat` | 输出契约的公共实现（纯 lib），被所有转换器依赖 |
-| `crates/ai-studio` | Google AI Studio 转换器，二进制 `ai-studio` |
-| `crates/cherry` | Cherry Studio 备份转换器，二进制 `cherry` |
-| `crates/qwen` | Qwen 转换器，二进制 `qwen` |
-| `crates/claude` | Claude 转换器，二进制 `claude` |
-| `crates/rikka` | RikkaHub 备份转换器，二进制 `rikka` |
+| `crates/afterchat-chatformat` | 输出契约的公共实现（纯 lib），被所有转换器依赖 |
+| `crates/afterchat-ai-studio` | Google AI Studio 转换器，二进制 `ai-studio` |
+| `crates/afterchat-cherry` | Cherry Studio 备份转换器，二进制 `cherry` |
+| `crates/afterchat-qwen` | Qwen 转换器，二进制 `qwen` |
+| `crates/afterchat-claude` | Claude 转换器，二进制 `claude` |
+| `crates/afterchat-rikka` | RikkaHub 备份转换器，二进制 `rikka` |
 | `gui` | Tauri + Bun 桌面 GUI，通过 Sidecar 调用上面的转换器 |
 | `docs` | 契约、架构与各转换器说明 |
 
@@ -62,7 +62,7 @@ bun run build
 
 ### 新增一个转换器
 
-1. 在 `crates/<name>` 下创建 crate（`Cargo.toml` + `src/`），依赖 `chatformat = { package = "afterchat-chatformat", path = "../chatformat" }`。
+1. 在 `crates/afterchat-<name>` 下创建 crate（`Cargo.toml` + `src/`），依赖 `chatformat = { package = "afterchat-chatformat", path = "../afterchat-chatformat" }`。
 2. 加入根 `Cargo.toml` 的 `members`。
 3. 在 `gui/scripts/prepare-sidecars.mjs` 的 `binaries` 数组登记 `{ pkg, bin }`。
 4. 在 `gui/src-tauri/tauri.conf.json` 的 `tauri.bundle.externalBin` 追加 `bin/<bin>`。
