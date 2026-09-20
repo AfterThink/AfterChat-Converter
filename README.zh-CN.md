@@ -105,26 +105,10 @@ bun install
 bun run build
 ```
 
-## AfterChat 数据工作流生态
+## 相关项目
 
-本工具是 AfterChat 对话数据生态的重要组成部分，与周边工具协同构成完整闭环：
-
-```mermaid
-flowchart LR
-    A["Web 对话<br/>(ChatGPT / Claude / Gemini / DeepSeek 等 28+ 平台)"] -->|实时采集<br/>增量导出| B["AfterChat-Script<br/>(浏览器脚本 / 网页端)"]
-    C["历史导出包 / 第三方客户端<br/>(Google AI Studio / Cherry Studio / 官方导出等)"] -->|离线迁移<br/>格式归一化| D["AfterChat-Converter<br/>(本工具 / Rust 核心)"]
-    B -->|标准 AfterChat-Format Markdown| E["AfterChat 桌面工作区<br/>(本地文件系统 / 独立 SQLite / 知识库)"]
-    D -->|标准 AfterChat-Format Markdown| E
-```
-
-1. **采集**：
-   - **在线网页端**：通过 [AfterChat-Script](https://github.com/AfterThink/AfterChat-Script) 浏览器脚本，一键导出各网页对话；
-   - **离线历史备份**：通过本工具 **AfterChat-Converter**，将主流客户端及平台的历史备份批量转换为标准格式。
-2. **规范化存储**：
-   - 统一遵循 [AfterChat-Format 契约规范](./docs/CHATFORMAT.md)，完整保留思考过程（Reasoning/Thinking）、元数据与消息时序。
-3. **价值挖掘与检索**：
-   - 导入 [AfterChat 桌面端](https://github.com/AfterThink/AfterChat-App-Download)，进行本地知识库构建、语义检索、离线阅读与多维管理。
-
+- [AfterChat-Script](https://github.com/AfterThink/AfterChat-Script)：浏览器脚本，一键把各主流平台的网页对话导出为 Markdown，与本工具输出格式一致。
+- [AfterChat 桌面端](https://github.com/AfterThink/AfterChat-App-Download)：在本地管理、构建聊天会话知识库。
 
 ## 开源许可证
 

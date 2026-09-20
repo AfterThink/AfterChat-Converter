@@ -105,25 +105,10 @@ bun install
 bun run build
 ```
 
-## The AfterChat Workflow Ecosystem
+## Related Projects
 
-AfterChat Converter is an integral component of the AfterChat conversational data ecosystem, providing a complete end-to-end pipeline:
-
-```mermaid
-flowchart LR
-    A["Web Conversations<br/>(ChatGPT / Claude / Gemini / DeepSeek, 28+ sites)"] -->|Live Capture & Incremental Export| B["AfterChat-Script<br/>(Browser Userscript)"]
-    C["Historical Exports / Third-Party Apps<br/>(Google AI Studio / Cherry Studio / Official dumps)"] -->|Offline Migration & Normalization| D["AfterChat-Converter<br/>(This Tool / Rust Core)"]
-    B -->|Standard AfterChat-Format Markdown| E["AfterChat Desktop Workspace<br/>(Local Filesystem / SQLite / Knowledge Base)"]
-    D -->|Standard AfterChat-Format Markdown| E
-```
-
-1. **Capture**:
-   - **Web Sessions**: Export online chats seamlessly via the [AfterChat — LLM Chat Exporter (Script)](https://github.com/AfterThink/AfterChat-Script) browser extension.
-   - **Offline Archives**: Batch convert historical backups and client databases into standardized formats using **AfterChat-Converter** (this tool).
-2. **Normalize & Store**:
-   - Standardized against the [AfterChat-Format Specification](./docs/CHATFORMAT.md), preserving chain-of-thought reasoning, metadata, and timestamps without loss of syntax.
-3. **Discover & Manage**:
-   - Import into the [AfterChat Desktop App](https://github.com/AfterThink/AfterChat-App-Download) for local knowledge base construction, semantic search, offline browsing, and multi-dimensional organization.
+- [AfterChat-Script](https://github.com/AfterThink/AfterChat-Script): browser userscript that exports online web chats into Markdown, the same format this tool outputs.
+- [AfterChat Desktop App](https://github.com/AfterThink/AfterChat-App-Download): manage your conversations and build a knowledge base locally.
 
 ## License
 
