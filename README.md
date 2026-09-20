@@ -1,4 +1,4 @@
-# AfterChat Converter
+<h1 align="center">AfterChat Converter</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Rust-2024-orange?style=for-the-badge&logo=rust" alt="Rust 2024" />
