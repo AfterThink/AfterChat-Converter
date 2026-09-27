@@ -43,19 +43,16 @@
 2. **开源许可证**：推荐采用 **AGPLv3**。
    - 闭源本体通过命令行独立子进程（Fork-Exec）拉起转换器，符合 FSF 独立程序标准，**不会受到 AGPLv3 传染**；
    - 能够有效防范第三方将转换器部署为云端 SaaS 服务进行白嫖。
-3. **标准制定策略**：
-   - 阶段一（当前）：以本仓库的 `docs/CHATFORMAT.md` 作为规范草案，借助 `crates/afterchat-chatformat` 和 `AfterChat-Script` 的双端实现作为事实标准背书；
-   - 阶段二（长远）：待覆盖平台达到 10+ 或出现外部第三方采纳时，再独立建仓（如 `AfterThink/AfterChat-Format-spec`）并发布中立 SDK。
+4. **ChatFormat 引用规范 (References RFC) 确立（2026-09-27 补充）**：
+   - 在 `docs/CHATFORMAT.md` 中新增 **4.4 全局引用与信源区**；
+   - 规定位于整场对话文末（不含 `---` 分隔线，空行承接）、正文角标紧凑连排 `[1][2]`、列表项必须采用 Markdown 超链接 `- [N] [标题](URL)`、URL 必须全局规范化去重。
 
 ---
 
 ## 4. 下一个会话的待办任务 (Next Steps)
 
-1. **多工作区接入**：
-   - 在新会话中确保同时加载了 `AfterChat-Converter` 和 `AfterChat-Script-Dev` 两个工作区；
-2. **`AfterChat-Script-Dev` 文档对齐**：
-   - 在 ACScript 的 README 中增加对 `AfterChat-Converter` 的推荐与生态闭环说明；
-   - 在 ACScript 中引入对 `ChatFormat Specification` 的标准遵循声明（引用 `AfterChat-Converter/docs/CHATFORMAT.md` 作为单一事实来源）；
-3. **提交与协议落地**：
-   - 确认本仓库当前未提交的 3 个文件并执行提交；
-   - 添加 AGPLv3 的 `LICENSE` 文件。
+1. **各端引用格式标准化落地**：
+   - 详细审计清单与多阶段改造方案见 `AfterChat-Script-Dev/HANDOFF-REFERENCES.md`；
+   - 将 `AfterChat-Script` 中其余适配器（Gemini、Grok、Sakana、ChatGPT、PPLX、国内诸模型）统一收敛至本 RFC 规范；
+2. **`afterchat-chatformat` Rust 核心库支持**：
+   - 评估在 `Conversation` 模型中增加 `references` 结构化支持并提供标准 Markdown 渲染能力。
