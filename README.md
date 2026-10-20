@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Rust-2024-orange?style=for-the-badge&logo=rust" alt="Rust 2024" />
   <img src="https://img.shields.io/badge/Tauri-1.x-24C8DB?style=for-the-badge&logo=tauri" alt="Tauri" />
-  <img src="https://img.shields.io/badge/Converters-5-success?style=for-the-badge" alt="5 converters" />
+  <img src="https://img.shields.io/badge/Converters-6-success?style=for-the-badge" alt="6 converters" />
   <img src="https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows" alt="Windows" />
 </p>
 
@@ -13,7 +13,7 @@
 
 Convert conversation backups from various AI platforms into standardized **AfterChat Markdown / ZIP** archives for local storage, migration, and offline reading.
 
-Supports **5 backup sources**: Google AI Studio, Cherry Studio, Qwen, Claude, and RikkaHub. Generated Markdown documents can be directly imported into the [AfterChat](https://github.com/AfterThink/AfterChat-App-Download) workspace.
+Supports **6 backup sources**: ChatGPT, Claude, Google AI Studio, Cherry Studio, Qwen, and RikkaHub. Generated Markdown documents can be directly imported into the [AfterChat](https://github.com/AfterThink/AfterChat-App-Download) workspace.
 
 ---
 
@@ -21,10 +21,11 @@ Supports **5 backup sources**: Google AI Studio, Cherry Studio, Qwen, Claude, an
 
 | Source | Input | Output |
 | --- | --- | --- |
+| ChatGPT | Official data export ZIP / JSON | Markdown ZIP |
+| Claude | Data export ZIP | Markdown ZIP |
 | Google AI Studio | Exported JSON | Markdown (Single file or directory tree) |
 | Cherry Studio | Backup ZIP | Markdown ZIP |
 | Qwen | Web exported JSON | Markdown ZIP |
-| Claude | Data export ZIP | Markdown ZIP |
 | RikkaHub | Backup ZIP | Markdown ZIP |
 
 Example output structure:
@@ -65,9 +66,10 @@ You can check "Output to custom directory" at the bottom of the window to select
 
 ### Command-Line Interface (CLI)
 
-Both the installer and portable archive contain 5 standalone executable binaries:
+Both the installer and portable archive contain 6 standalone executable binaries:
 
 ```powershell
+chatgpt   chatgpt-export.zip         # ChatGPT data export (ZIP containing conversations.json, or single JSON)
 rikka     RikkaHub-backup.zip        # RikkaHub backup (automatically extracts and reads SQLite DB)
 cherry    cherry-backup.zip          # Cherry Studio backup
 qwen      qwen-all.json              # Qwen export (supports multiple files)
@@ -75,11 +77,17 @@ claude    data-export.zip            # Claude data export archive
 ai-studio prompt.json                # Google AI Studio export file
 ```
 
-Outputs are saved in the source directory by default. Use `-o` to specify an output directory or file name:
+By default, outputs are packaged into a ZIP archive next to the source file. Use `-o` to customize the destination:
 
 ```powershell
-rikka backup.zip -o out\              # Writes to out\chat-export-rikka-all-<timestamp>.zip
-rikka backup.zip -o out\my-name.zip   # Explicitly specifies the ZIP filename
+# Directory Expansion Mode: Directly writes individual Markdown files into a folder (ideal for AfterChat / Obsidian vaults)
+chatgpt backup.zip -o D:\MyVault\
+
+# Explicit ZIP Mode: Explicitly specifies the output archive filename
+chatgpt backup.zip -o out\my-name.zip
+
+# Direct Unpack Mode: Drops an existing AfterChat format ZIP directly into the destination vault
+claude chat-export-claude-all-xxx.zip -o D:\MyVault\
 ```
 
 Files can also be directly dropped onto individual executable icons in File Explorer (`ai-studio` outputs single Markdown files and is best run via CLI).

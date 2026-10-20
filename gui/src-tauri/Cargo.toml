@@ -1,6 +1,6 @@
 [package]
 name = "afterchat-converter"
-version = "0.2.0"
+version = "0.3.0"
 description = "Tauri GUI for local conversation converters"
 edition = "2021"
 
@@ -11,6 +11,7 @@ tauri-build = { version = "1.5", features = [] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tauri = { version = "1.6", features = ["dialog-all", "path-all", "process-command-api", "window-close", "window-start-dragging"] }
+chatformat = { package = "afterchat-chatformat", path = "../../crates/afterchat-chatformat" }
 
 [features]
 default = ["custom-protocol"]

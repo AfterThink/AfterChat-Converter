@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use chatformat::{
-    Conversation as ChatConversation, ExportFailure, Message as ChatMessage, MetadataLine,
-    NameStyle, Role, ZipExport, default_zip_name,
+    Conversation as ChatConversation, DirExport, ExportFailure, Message as ChatMessage,
+    MetadataLine, NameStyle, Role, ZipExport, default_zip_name,
 };
 use rayon::prelude::*;
 use rusqlite::Connection;
@@ -50,6 +50,26 @@ pub fn run_conversion(options: ConvertOptions) -> Result<RunSummary> {
         bail!("输入必须是文件: {}", input.display());
     }
 
+    if chatformat::is_afterchat_zip(input) {
+        let out_dir = match options.output.as_deref() {
+            Some(out) if !is_zip_output(out) => out.to_path_buf(),
+            Some(out) => out.parent().unwrap_or(out).to_path_buf(),
+            None => {
+                let stem = input
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("rikka_extracted");
+                input.parent().unwrap_or(Path::new(".")).join(stem)
+            }
+        };
+        let count = chatformat::unpack_zip(input, &out_dir)?;
+        return Ok(RunSummary {
+            output: out_dir,
+            exported: count,
+            skipped: 0,
+        });
+    }
+
     let payload = if is_zip_input(input) {
         read_zip_entries(input)?
     } else {
@@ -79,6 +99,24 @@ pub fn run_conversion(options: ConvertOptions) -> Result<RunSummary> {
                 reason: failure.reason,
             }),
         }
+    }
+
+    if let Some(out_dir) = options.output.as_deref().filter(|p| !is_zip_output(p)) {
+        chatformat::write_directory(&DirExport {
+            platform: PLATFORM_ID,
+            conversations: &conversations,
+            failures: &failures,
+            output: out_dir,
+            source: Some(input),
+            name_style: NameStyle::Spec,
+            show_progress: true,
+        })?;
+
+        return Ok(RunSummary {
+            output: out_dir.to_path_buf(),
+            exported: conversations.len(),
+            skipped: failures.len(),
+        });
     }
 
     let target = resolve_zip_target(
@@ -737,11 +775,14 @@ fn is_zip_output(path: &Path) -> bool {
 
 fn resolve_zip_target(input: &Path, output: Option<&Path>, zip_name: String) -> Result<PathBuf> {
     match output {
-        Some(path) if is_zip_output(path) => Ok(path.to_path_buf()),
-        Some(dir) => {
-            fs::create_dir_all(dir)
-                .with_context(|| format!("创建输出目录失败 {}", dir.display()))?;
-            Ok(dir.join(zip_name))
+        Some(path) => {
+            if let Some(parent) = path.parent() {
+                if !parent.as_os_str().is_empty() {
+                    fs::create_dir_all(parent)
+                        .with_context(|| format!("创建输出目录失败 {}", parent.display()))?;
+                }
+            }
+            Ok(path.to_path_buf())
         }
         None => {
             let parent = input

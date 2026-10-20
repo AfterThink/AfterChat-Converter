@@ -233,7 +233,7 @@ async function pickInputFile() {
     multiple: false,
     directory: false,
     title: getT().chooseInput,
-    filters: [{ name: "Export Files", extensions: ["json", "zip"] }],
+    filters: [{ name: "Export Files", extensions: ["json", "zip", "db"] }],
   });
 
   const selectedPath = Array.isArray(picked) ? picked[0] : picked;
@@ -397,7 +397,7 @@ function buildSuggestedPath(input) {
 }
 
 function converterOutputsDirectory(converter) {
-  return converter === null || converter === "cherry" || converter === "claude" || converter === "rikka";
+  return converter === null || converter === "cherry" || converter === "claude" || converter === "rikka" || converter === "chatgpt";
 }
 
 function selectConverter(input) {
@@ -408,6 +408,7 @@ function selectConverter(input) {
   if (name.includes("batch") || name.includes("claude")) return "claude";
   if (name.includes("rikka")) return "rikka";
   if (name.includes("ai-studio") || name.includes("aistudio") || name.includes("gemini")) return "ai-studio";
+  if (name.includes("chatgpt") || name.includes("openai") || /^[0-9a-f]{64}/i.test(name)) return "chatgpt";
   return null;
 }
 

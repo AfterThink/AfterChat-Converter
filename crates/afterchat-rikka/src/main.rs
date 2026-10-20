@@ -28,13 +28,13 @@ fn main() -> Result<()> {
     })?;
 
     println!(
-        "已打包 {} 个对话 → {}",
+        "已导出 {} 个对话 → {}",
         summary.exported,
         summary.output.display()
     );
     if summary.skipped > 0 {
         println!(
-            "跳过 {} 个无消息对话（详见压缩包内 export-failures.md）",
+            "跳过 {} 个无消息对话（详见 export-failures.md）",
             summary.skipped
         );
     }

@@ -43,11 +43,10 @@ fn build_fixture(dir: &TempDir) -> std::path::PathBuf {
 }
 
 #[test]
-fn converts_claude_zip_into_contract_zip() {
+fn converts_claude_zip_into_directory() {
     let dir = TempDir::new().unwrap();
     let input = build_fixture(&dir);
-    let out_dir = dir.path().join("out");
-    fs::create_dir_all(&out_dir).unwrap();
+    let out_dir = dir.path().join("vault");
 
     Command::cargo_bin("claude")
         .unwrap()
@@ -57,35 +56,25 @@ fn converts_claude_zip_into_contract_zip() {
         .assert()
         .success();
 
-    let produced: Vec<_> = fs::read_dir(&out_dir)
+    assert!(out_dir.exists());
+    assert!(out_dir.join("export-failures.md").exists());
+
+    let files: Vec<std::path::PathBuf> = fs::read_dir(&out_dir)
         .unwrap()
         .map(|entry| entry.unwrap().path())
-        .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("zip"))
-        .collect();
-    assert_eq!(produced.len(), 1, "expected exactly one zip: {produced:?}");
-
-    let file = fs::File::open(&produced[0]).unwrap();
-    let mut archive = zip::ZipArchive::new(file).unwrap();
-    let names: Vec<String> = (0..archive.len())
-        .map(|index| archive.by_index(index).unwrap().name().to_string())
         .collect();
 
-    assert!(
-        names.iter().any(|name| name == "export-failures.md"),
-        "empty conversation should be reported: {names:?}"
-    );
-
-    let entry_name = names
+    let entry_path = files
         .iter()
-        .find(|name| name.ends_with("-Hello World.md"))
-        .expect("conversation entry should be `{time}-Hello World.md`")
-        .clone();
+        .find(|path| {
+            path.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .ends_with("-Hello World.md")
+        })
+        .expect("conversation file should be `{time}-Hello World.md`");
 
-    let mut entry = archive.by_name(&entry_name).unwrap();
-    let mut markdown = String::new();
-    std::io::Read::read_to_string(&mut entry, &mut markdown).unwrap();
-    drop(entry);
-
+    let markdown = fs::read_to_string(entry_path).unwrap();
     assert!(markdown.starts_with("## Metadata\n"), "{markdown}");
     assert!(markdown.contains("- **Model:** `Unknown`\n"), "{markdown}");
     assert!(markdown.contains("- **Time:** 2024-09-09 "), "{markdown}");
@@ -100,5 +89,62 @@ fn converts_claude_zip_into_contract_zip() {
     assert!(
         markdown.contains("### 🤖 Assistant\n\nAnswer\n"),
         "{markdown}"
+    );
+}
+
+#[test]
+fn converts_claude_zip_into_explicit_zip() {
+    let dir = TempDir::new().unwrap();
+    let input = build_fixture(&dir);
+    let out_zip = dir.path().join("out").join("exported.zip");
+
+    Command::cargo_bin("claude")
+        .unwrap()
+        .arg(&input)
+        .arg("-o")
+        .arg(&out_zip)
+        .assert()
+        .success();
+
+    assert!(out_zip.exists());
+
+    let file = fs::File::open(&out_zip).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let names: Vec<String> = (0..archive.len())
+        .map(|index| archive.by_index(index).unwrap().name().to_string())
+        .collect();
+
+    assert!(names.iter().any(|name| name == "export-failures.md"));
+    assert!(names.iter().any(|name| name.ends_with("-Hello World.md")));
+}
+
+#[test]
+fn unpacks_afterchat_zip_directly() {
+    let dir = TempDir::new().unwrap();
+    let afterchat_zip = dir.path().join("afterchat_vault.zip");
+
+    {
+        let file = fs::File::create(&afterchat_zip).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file("sample.md", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(b"# Hello Claude Vault").unwrap();
+        zip.finish().unwrap();
+    }
+
+    let out_dir = dir.path().join("unpacked");
+
+    Command::cargo_bin("claude")
+        .unwrap()
+        .arg(&afterchat_zip)
+        .arg("-o")
+        .arg(&out_dir)
+        .assert()
+        .success();
+
+    assert!(out_dir.join("sample.md").exists());
+    assert_eq!(
+        fs::read_to_string(out_dir.join("sample.md")).unwrap(),
+        "# Hello Claude Vault"
     );
 }

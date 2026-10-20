@@ -37,6 +37,27 @@ dependencies = [
  "log",
  "rayon",
  "serde_json",
+ "tempfile",
+ "walkdir",
+ "zip",
+]
+
+[[package]]
+name = "afterchat-chatgpt"
+version = "0.1.0"
+dependencies = [
+ "afterchat-chatformat",
+ "anyhow",
+ "assert_cmd",
+ "clap",
+ "env_logger",
+ "log",
+ "predicates",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "walkdir",
  "zip",
 ]
 
@@ -76,8 +97,9 @@ dependencies = [
 
 [[package]]
 name = "afterchat-converter"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
+ "afterchat-chatformat",
  "serde",
  "serde_json",
  "tauri",

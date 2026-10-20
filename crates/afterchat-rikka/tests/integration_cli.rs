@@ -368,3 +368,69 @@ fn duplicated_titles_get_suffix() {
         "{names:#?}"
     );
 }
+
+#[test]
+fn converts_backup_into_directory() {
+    let dir = tempdir().expect("tempdir");
+    let backup = make_plain_backup(
+        dir.path(),
+        &[DbConversation {
+            id: "conv-1".into(),
+            assistant_id: "a1".into(),
+            title: "Hello Rikka".into(),
+            create_at: 1_700_000_000_000,
+            custom_system_prompt: String::new(),
+            nodes: vec![(user_message("hello rikka"), 0)],
+        }],
+    );
+
+    let out_dir = dir.path().join("vault");
+    let status = Command::new(env!("CARGO_BIN_EXE_rikka"))
+        .arg(&backup)
+        .arg("-o")
+        .arg(&out_dir)
+        .status()
+        .expect("run rikka");
+    assert!(status.success());
+
+    assert!(out_dir.exists());
+    let assistant_dir = out_dir.join("Gemini");
+    assert!(assistant_dir.is_dir());
+    let files: Vec<PathBuf> = fs::read_dir(&assistant_dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(files.len(), 1);
+    let md = fs::read_to_string(&files[0]).unwrap();
+    assert!(md.contains("hello rikka"));
+}
+
+#[test]
+fn unpacks_afterchat_zip_directly() {
+    let dir = tempdir().expect("tempdir");
+    let afterchat_zip = dir.path().join("afterchat_vault.zip");
+
+    {
+        let file = File::create(&afterchat_zip).unwrap();
+        let mut zip = ZipWriter::new(file);
+        zip.start_file("sample.md", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(b"# Hello Rikka Vault").unwrap();
+        zip.finish().unwrap();
+    }
+
+    let out_dir = dir.path().join("unpacked");
+    let status = Command::new(env!("CARGO_BIN_EXE_rikka"))
+        .arg(&afterchat_zip)
+        .arg("-o")
+        .arg(&out_dir)
+        .status()
+        .expect("run rikka");
+    assert!(status.success());
+
+    assert!(out_dir.join("sample.md").exists());
+    assert_eq!(
+        fs::read_to_string(out_dir.join("sample.md")).unwrap(),
+        "# Hello Rikka Vault"
+    );
+}

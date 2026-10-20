@@ -8,24 +8,6 @@ use assert_cmd::cargo::cargo_bin_cmd;
 use zip::ZipArchive;
 use zip::write::SimpleFileOptions;
 
-/// 产物应该只有一个 `chat-export-cherry-all-<ms>.zip`
-fn find_output_zip(dir: &Path) -> PathBuf {
-    let mut found: Vec<PathBuf> = fs::read_dir(dir)
-        .expect("read output dir")
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| {
-                    name.starts_with("chat-export-cherry-all-") && name.ends_with(".zip")
-                })
-        })
-        .collect();
-    found.sort();
-    assert_eq!(found.len(), 1, "输出目录里应恰好有一个导出 zip: {dir:?}");
-    found.remove(0)
-}
-
 /// 读出 zip 里所有条目（名字 → 内容）
 fn read_zip(zip_path: &Path) -> BTreeMap<String, String> {
     let file = fs::File::open(zip_path).expect("open zip");
@@ -253,20 +235,19 @@ fn create_zip_backup(entries: &[(&str, String)], archive_path: &Path) {
 fn converts_zip_backup_by_extracting_data_json() {
     let tmp = create_test_dir();
     let input_zip = tmp.join("my-cherry-backup.zip");
-    let output_dir = tmp.join("out");
+    let output_zip = tmp.join("out.zip");
     create_zip_backup(&[("data.json", sample_cherry_export_json())], &input_zip);
 
     cargo_bin_cmd!("cherry")
         .args([
             input_zip.to_string_lossy().as_ref(),
             "-o",
-            output_dir.to_string_lossy().as_ref(),
+            output_zip.to_string_lossy().as_ref(),
         ])
         .assert()
         .success();
 
-    let zip_path = find_output_zip(&output_dir);
-    let entries = read_zip(&zip_path);
+    let entries = read_zip(&output_zip);
 
     assert_eq!(entries.len(), 1, "一个主题应产出恰好一个条目");
     let (entry_name, text) = entries.iter().next().expect("one entry");
@@ -280,10 +261,74 @@ fn converts_zip_backup_by_extracting_data_json() {
 }
 
 #[test]
+fn converts_backup_into_directory() {
+    let tmp = create_test_dir();
+    let input_zip = tmp.join("my-cherry-backup.zip");
+    let output_dir = tmp.join("vault");
+    create_zip_backup(&[("data.json", sample_cherry_export_json())], &input_zip);
+
+    cargo_bin_cmd!("cherry")
+        .args([
+            input_zip.to_string_lossy().as_ref(),
+            "-o",
+            output_dir.to_string_lossy().as_ref(),
+        ])
+        .assert()
+        .success();
+
+    assert!(output_dir.exists());
+    let assistant_dir = output_dir.join("Unit Assistant");
+    assert!(assistant_dir.is_dir());
+    let files: Vec<PathBuf> = fs::read_dir(&assistant_dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(files.len(), 1);
+    let md = fs::read_to_string(&files[0]).unwrap();
+    assert!(md.contains("hello cherry"));
+
+    let _ = fs::remove_dir_all(tmp);
+}
+
+#[test]
+fn unpacks_afterchat_zip_directly() {
+    let tmp = create_test_dir();
+    let afterchat_zip = tmp.join("afterchat_vault.zip");
+
+    {
+        let file = fs::File::create(&afterchat_zip).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file("sample.md", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(b"# Hello Cherry Vault").unwrap();
+        zip.finish().unwrap();
+    }
+
+    let out_dir = tmp.join("unpacked");
+
+    cargo_bin_cmd!("cherry")
+        .args([
+            afterchat_zip.to_string_lossy().as_ref(),
+            "-o",
+            out_dir.to_string_lossy().as_ref(),
+        ])
+        .assert()
+        .success();
+
+    assert!(out_dir.join("sample.md").exists());
+    assert_eq!(
+        fs::read_to_string(out_dir.join("sample.md")).unwrap(),
+        "# Hello Cherry Vault"
+    );
+
+    let _ = fs::remove_dir_all(tmp);
+}
+
+#[test]
 fn zip_data_json_is_found_in_nested_dir_despite_bom() {
     let tmp = create_test_dir();
     let input_zip = tmp.join("nested.zip");
-    let output_dir = tmp.join("out");
+    let output_zip = tmp.join("out.zip");
     // data.json 在子目录里，而且带 UTF-8 BOM
     let with_bom = format!("\u{feff}{}", sample_cherry_export_json());
     create_zip_backup(
@@ -298,12 +343,12 @@ fn zip_data_json_is_found_in_nested_dir_despite_bom() {
         .args([
             input_zip.to_string_lossy().as_ref(),
             "-o",
-            output_dir.to_string_lossy().as_ref(),
+            output_zip.to_string_lossy().as_ref(),
         ])
         .assert()
         .success();
 
-    assert_eq!(read_zip(&find_output_zip(&output_dir)).len(), 1);
+    assert_eq!(read_zip(&output_zip).len(), 1);
 
     let _ = fs::remove_dir_all(tmp);
 }
@@ -355,20 +400,19 @@ fn explicit_zip_output_path_is_used() {
 fn markdown_matches_chatformat() {
     let tmp = create_test_dir();
     let input_json = tmp.join("backup.json");
-    let output_dir = tmp.join("out");
+    let output_zip = tmp.join("out.zip");
     fs::write(&input_json, format_sample_json()).expect("write backup");
 
     cargo_bin_cmd!("cherry")
         .args([
             input_json.to_string_lossy().as_ref(),
             "-o",
-            output_dir.to_string_lossy().as_ref(),
+            output_zip.to_string_lossy().as_ref(),
         ])
         .assert()
         .success();
 
-    let zip_path = find_output_zip(&output_dir);
-    let entries = read_zip(&zip_path);
+    let entries = read_zip(&output_zip);
     assert_eq!(entries.len(), 1);
     let (entry_name, text) = entries.iter().next().expect("one entry");
     assert_time_prefixed(entry_name, "Format Assistant", "Format Topic");
@@ -412,19 +456,19 @@ fn markdown_matches_chatformat() {
 fn numeric_created_at_does_not_break_assistant_metadata() {
     let tmp = create_test_dir();
     let input_json = tmp.join("numeric.json");
-    let output_dir = tmp.join("out");
+    let output_zip = tmp.join("out.zip");
     fs::write(&input_json, numeric_created_at_json()).expect("write backup");
 
     cargo_bin_cmd!("cherry")
         .args([
             input_json.to_string_lossy().as_ref(),
             "-o",
-            output_dir.to_string_lossy().as_ref(),
+            output_zip.to_string_lossy().as_ref(),
         ])
         .assert()
         .success();
 
-    let entries = read_zip(&find_output_zip(&output_dir));
+    let entries = read_zip(&output_zip);
     let (entry_name, text) = entries.iter().next().expect("one entry");
 
     // 曾经 `TopicMeta.created_at` 写死 Option<String>，一个数字就让整棵助手树解析失败，

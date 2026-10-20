@@ -14,8 +14,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use chatformat::Message as ChatMessage;
 use chatformat::{
-    Conversation, ExportFailure, NameStyle, Role, SINGLE_NAME_MAX, ZipExport, default_zip_name,
-    time,
+    Conversation, DirExport, ExportFailure, NameStyle, Role, SINGLE_NAME_MAX, ZipExport,
+    default_zip_name, time,
 };
 use log::{debug, warn};
 use serde::Deserialize;
@@ -88,6 +88,23 @@ fn convert_one(
     if !input.exists() {
         bail!("input path does not exist: {}", input.display());
     }
+
+    if chatformat::is_afterchat_zip(input) {
+        let out_dir = match output {
+            Some(out) if !output_is_file => out.to_path_buf(),
+            Some(out) => out.parent().unwrap_or(out).to_path_buf(),
+            None => {
+                let stem = input
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("qwen_extracted");
+                input.parent().unwrap_or(Path::new(".")).join(stem)
+            }
+        };
+        chatformat::unpack_zip(input, &out_dir)?;
+        return Ok(out_dir);
+    }
+
     if !input.is_file() {
         bail!("input must be a JSON file: {}", input.display());
     }
@@ -123,6 +140,21 @@ fn convert_one(
                     reason: failure.reason,
                 })
                 .collect();
+
+            // 若指定了输出目录（非单文件），直接以 Markdown 文件树形式写入该目录
+            if let Some(out_dir) = output.filter(|_| !output_is_file) {
+                chatformat::write_directory(&DirExport {
+                    platform: PLATFORM_ID,
+                    conversations: &conversations,
+                    failures: &failures,
+                    output: out_dir,
+                    source: Some(input),
+                    name_style: NameStyle::Js,
+                    show_progress,
+                })?;
+                return Ok(out_dir.to_path_buf());
+            }
+
             let target =
                 resolve_target(input, output, output_is_file, default_zip_name(PLATFORM_ID))?;
             ensure_parent_dir(&target)?;

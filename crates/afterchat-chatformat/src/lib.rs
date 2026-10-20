@@ -11,6 +11,7 @@
 //! 每个平台的转换器只负责「解析输入 → 映射成 [`Conversation`]」，
 //! 输出一律经本 crate 产出，保证所有平台的产物逐字节一致。
 
+pub mod dir;
 pub mod markdown;
 pub mod naming;
 pub mod time;
@@ -20,6 +21,7 @@ use std::borrow::Cow;
 
 use indicatif::{ProgressBar, ProgressStyle};
 
+pub use dir::{DirExport, is_afterchat_zip, unpack_zip, write_directory};
 pub use markdown::{remove_bold_outside_code, strip_hashes};
 pub use naming::{
     NameStyle, sanitize_filename, sanitize_filename_js, sanitize_filename_with,

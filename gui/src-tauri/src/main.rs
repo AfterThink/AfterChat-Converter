@@ -49,14 +49,16 @@ enum ConverterKind {
     Qwen,
     Claude,
     Rikka,
+    Chatgpt,
 }
 
-const ALL_CONVERTERS: [ConverterKind; 5] = [
+const ALL_CONVERTERS: [ConverterKind; 6] = [
     ConverterKind::AiStudio,
     ConverterKind::Cherry,
     ConverterKind::Qwen,
     ConverterKind::Claude,
     ConverterKind::Rikka,
+    ConverterKind::Chatgpt,
 ];
 
 #[derive(Debug, Deserialize)]
@@ -119,6 +121,45 @@ fn inspect_input(path: String) -> Result<InputInfo, String> {
 async fn run_conversion(request: ConvertRequest) -> Result<ConvertResponse, String> {
     let input_path = PathBuf::from(&request.input_path);
     let output_path = request.output_path.as_ref().map(PathBuf::from);
+
+    // 1. 若输入本身是已符合规范的 AfterChat ZIP 归档包，直接解压提取到目标目录
+    if chatformat::is_afterchat_zip(&input_path) {
+        let dest_dir = if let Some(out) = &output_path {
+            if out
+                .extension()
+                .and_then(|s| s.to_str())
+                .is_some_and(|s| s.eq_ignore_ascii_case("zip"))
+            {
+                out.parent().unwrap_or(out).to_path_buf()
+            } else {
+                out.clone()
+            }
+        } else {
+            let stem = input_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("afterchat_extracted");
+            input_path.parent().unwrap_or(Path::new(".")).join(stem)
+        };
+
+        match chatformat::unpack_zip(&input_path, &dest_dir) {
+            Ok(count) => {
+                return Ok(ConvertResponse {
+                    exit_code: 0,
+                    stdout: format!(
+                        "已直接解压提取 {count} 个 AfterChat Markdown 文件至 {}",
+                        dest_dir.display()
+                    ),
+                    stderr: String::new(),
+                    output_path: dest_dir.display().to_string(),
+                });
+            }
+            Err(error) => {
+                return Err(format!("解压 AfterChat 归档包失败：{error}"));
+            }
+        }
+    }
+
     let args = build_args(&input_path, output_path.as_ref());
 
     if let Some(converter) = request.converter {
@@ -180,6 +221,7 @@ async fn try_sidecar(converter: ConverterKind, args: &[String]) -> Result<Sideca
         ConverterKind::Qwen => "qwen",
         ConverterKind::Claude => "claude",
         ConverterKind::Rikka => "rikka",
+        ConverterKind::Chatgpt => "chatgpt",
     };
 
     let (mut receiver, _child) = Command::new_sidecar(sidecar_name)
@@ -232,6 +274,11 @@ fn predict_output_path(
             .map(Path::to_path_buf)
             .unwrap_or_else(|| PathBuf::from("."))
             .join("claude_markdowns"),
+        Some(ConverterKind::Chatgpt) => input_path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("chatgpt_markdowns"),
         _ => {
             if input_path.is_dir() {
                 input_path.to_path_buf()
@@ -247,9 +294,13 @@ fn predict_output_path(
 
 #[tauri::command]
 fn reveal_in_file_manager(path: String) -> Result<(), String> {
-    let target = PathBuf::from(&path);
+    let mut target = PathBuf::from(&path);
     if !target.exists() {
-        return Err(format!("输出路径不存在：{}", target.display()));
+        if let Some(parent) = target.parent().filter(|p| p.exists()) {
+            target = parent.to_path_buf();
+        } else {
+            return Err(format!("输出路径不存在：{}", target.display()));
+        }
     }
 
     reveal_path(&target).map_err(|error| format!("无法打开输出位置 {}: {error}", target.display()))

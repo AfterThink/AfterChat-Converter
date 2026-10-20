@@ -8,13 +8,16 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # 国内本地开发用 gui/.npmrc 里的镜像源；CI 上统一走官方源
   BUN_CONFIG_REGISTRY: https://registry.npmjs.org/
 
 jobs:
   test:
-    name: Test (Windows)
-    runs-on: windows-latest
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
 
     steps:
       - name: Checkout
@@ -29,9 +32,11 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check formatting
+        if: matrix.os == 'ubuntu-latest'
         run: cargo fmt --all -- --check
 
       - name: Check GUI version consistency
+        if: matrix.os == 'ubuntu-latest'
         shell: pwsh
         run: |
           $pkg   = (Get-Content gui/package.json -Raw | ConvertFrom-Json).version
@@ -48,8 +53,9 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Check GUI lockfile
+        if: matrix.os == 'ubuntu-latest'
         working-directory: gui
         run: bun install --frozen-lockfile
 
-      - name: Test
+      - name: Test crates
         run: cargo test --workspace --exclude afterchat-converter

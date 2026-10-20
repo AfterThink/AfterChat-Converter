@@ -11,7 +11,7 @@ use log::{error, info, warn};
 #[command(
     name = "claude",
     version,
-    about = "Convert Claude export (ZIP/JSON) into an AfterChat conversation ZIP"
+    about = "Convert Claude export (ZIP/JSON) into AfterChat Markdown / ZIP"
 )]
 struct Cli {
     /// Input ZIP, JSON, or directory

@@ -18,6 +18,7 @@ const binaries = [
   { pkg: "afterchat-qwen", bin: "qwen" },
   { pkg: "afterchat-claude", bin: "claude" },
   { pkg: "afterchat-rikka", bin: "rikka" },
+  { pkg: "afterchat-chatgpt", bin: "chatgpt" },
 ];
 
 mkdirSync(tauriBinDir, { recursive: true });

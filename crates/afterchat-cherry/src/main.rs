@@ -1,7 +1,8 @@
 use anyhow::{Context, Result, bail};
 use chatformat::Message as ChatMessage;
 use chatformat::{
-    Conversation, ExportFailure, NameStyle, Role, UNKNOWN_MODEL, ZipExport, default_zip_name, time,
+    Conversation, DirExport, ExportFailure, NameStyle, Role, UNKNOWN_MODEL, ZipExport,
+    default_zip_name, time,
 };
 use clap::Parser;
 use rayon::prelude::*;
@@ -381,21 +382,22 @@ fn render_topic(ctx: &RenderContext<'_>, topic: &Topic) -> TopicOutcome {
     }))
 }
 
-fn is_output_file(path: &Path) -> bool {
-    matches!(
-        path.extension().and_then(|s| s.to_str()),
-        Some("zip") | Some("md")
-    )
+fn is_zip_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|s| s.to_str())
+        .is_some_and(|s| s.eq_ignore_ascii_case("zip"))
 }
 
-/// `-o` 指向 .zip 文件就当作目标文件，否则当作输出目录（省略则与输入同目录）
 fn resolve_zip_target(input: &Path, output: Option<&Path>, zip_name: String) -> Result<PathBuf> {
     match output {
-        Some(path) if is_output_file(path) => Ok(path.to_path_buf()),
-        Some(dir) => {
-            fs::create_dir_all(dir)
-                .with_context(|| format!("创建输出目录失败 {}", dir.display()))?;
-            Ok(dir.join(zip_name))
+        Some(path) => {
+            if let Some(parent) = path.parent() {
+                if !parent.as_os_str().is_empty() {
+                    fs::create_dir_all(parent)
+                        .with_context(|| format!("创建输出目录失败 {}", parent.display()))?;
+                }
+            }
+            Ok(path.to_path_buf())
         }
         None => {
             let parent = input.parent().unwrap_or_else(|| Path::new("."));
@@ -410,6 +412,23 @@ fn main() -> Result<()> {
 
     if !input_path.exists() {
         bail!("找不到文件: {}", input_path.display());
+    }
+
+    if chatformat::is_afterchat_zip(&input_path) {
+        let out_dir = match args.output.as_deref() {
+            Some(out) if !is_zip_path(out) => out.to_path_buf(),
+            Some(out) => out.parent().unwrap_or(out).to_path_buf(),
+            None => {
+                let stem = input_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("cherry_extracted");
+                input_path.parent().unwrap_or(Path::new(".")).join(stem)
+            }
+        };
+        let count = chatformat::unpack_zip(&input_path, &out_dir)?;
+        println!("已解压提取 {} 个对话 → {}", count, out_dir.display());
+        return Ok(());
     }
 
     let root = load_root(&input_path)?;
@@ -500,6 +519,32 @@ fn main() -> Result<()> {
         }
     }
 
+    if let Some(out_dir) = args.output.as_deref().filter(|p| !is_zip_path(p)) {
+        chatformat::write_directory(&DirExport {
+            platform: PLATFORM_ID,
+            conversations: &conversations,
+            failures: &failures,
+            output: out_dir,
+            source: Some(&input_path),
+            name_style: NameStyle::Spec,
+            show_progress: false,
+        })?;
+
+        println!(
+            "已导出 {} 个对话 → {}",
+            conversations.len(),
+            out_dir.display()
+        );
+        if !failures.is_empty() {
+            println!(
+                "跳过 {} 个空主题（详见 export-failures.md）",
+                failures.len()
+            );
+        }
+
+        return Ok(());
+    }
+
     let target = resolve_zip_target(
         &input_path,
         args.output.as_deref(),
@@ -524,7 +569,7 @@ fn main() -> Result<()> {
     })?;
 
     println!(
-        "已打包 {} 个对话 → {}",
+        "已导出 {} 个对话 → {}",
         conversations.len(),
         target.display()
     );

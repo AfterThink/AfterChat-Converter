@@ -15,8 +15,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use chatformat::{
-    Conversation, ExportFailure, Message, MetadataLine, NameStyle, Role, UNKNOWN_MODEL, ZipExport,
-    default_zip_name, time,
+    Conversation, DirExport, ExportFailure, Message, MetadataLine, NameStyle, Role, UNKNOWN_MODEL,
+    ZipExport, default_zip_name, time,
 };
 use serde::{Deserialize, Deserializer};
 use walkdir::WalkDir;
@@ -44,6 +44,27 @@ pub struct RunSummary {
 pub fn run_conversion(options: ConvertOptions) -> Result<RunSummary> {
     if !options.input.exists() {
         bail!("input path does not exist: {}", options.input.display());
+    }
+
+    if chatformat::is_afterchat_zip(&options.input) {
+        let out_dir = match options.output.as_deref() {
+            Some(out) if !is_zip(out) => out.to_path_buf(),
+            Some(out) => out.parent().unwrap_or(out).to_path_buf(),
+            None => {
+                let stem = options
+                    .input
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("claude_extracted");
+                options.input.parent().unwrap_or(Path::new(".")).join(stem)
+            }
+        };
+        let count = chatformat::unpack_zip(&options.input, &out_dir)?;
+        return Ok(RunSummary {
+            conversations: count,
+            failed: 0,
+            output: Some(out_dir),
+        });
     }
 
     let raws = load(&options.input)?;
@@ -74,6 +95,25 @@ pub fn run_conversion(options: ConvertOptions) -> Result<RunSummary> {
             "no exportable Claude conversations in {}",
             options.input.display()
         );
+    }
+
+    // 若指定了输出目录（非 .zip 文件），直接把每个会话以 Markdown 文件形式写入该目录
+    if let Some(out_dir) = options.output.as_deref().filter(|p| !is_zip(p)) {
+        chatformat::write_directory(&DirExport {
+            platform: PLATFORM,
+            conversations: &conversations,
+            failures: &failures,
+            output: out_dir,
+            source: Some(&options.input),
+            name_style: NameStyle::Spec,
+            show_progress: options.show_progress,
+        })?;
+
+        return Ok(RunSummary {
+            conversations: conversations.len(),
+            failed: failures.len(),
+            output: Some(out_dir.to_path_buf()),
+        });
     }
 
     let target = resolve_target(
@@ -355,11 +395,15 @@ fn display_title(title: &str) -> String {
 
 fn resolve_target(input: &Path, output: Option<&Path>, zip_name: String) -> Result<PathBuf> {
     match output {
-        Some(path) if is_zip(path) => Ok(path.to_path_buf()),
-        Some(dir) => {
-            fs::create_dir_all(dir)
-                .with_context(|| format!("failed to create output dir {}", dir.display()))?;
-            Ok(dir.join(zip_name))
+        Some(path) => {
+            if let Some(parent) = path.parent() {
+                if !parent.as_os_str().is_empty() {
+                    fs::create_dir_all(parent).with_context(|| {
+                        format!("failed to create output dir {}", parent.display())
+                    })?;
+                }
+            }
+            Ok(path.to_path_buf())
         }
         None => {
             let parent = input

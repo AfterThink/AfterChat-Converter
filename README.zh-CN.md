@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Rust-2024-orange?style=for-the-badge&logo=rust" alt="Rust 2024" />
   <img src="https://img.shields.io/badge/Tauri-1.x-24C8DB?style=for-the-badge&logo=tauri" alt="Tauri" />
-  <img src="https://img.shields.io/badge/Converters-5-success?style=for-the-badge" alt="5 converters" />
+  <img src="https://img.shields.io/badge/Converters-6-success?style=for-the-badge" alt="6 converters" />
   <img src="https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows" alt="Windows" />
 </p>
 
@@ -13,7 +13,7 @@
 
 把各主流 AI 平台的**对话备份**解析并转换为统一规范的 **AfterChat Markdown / ZIP** 格式，用于本地归档、数据迁移与离线阅读。
 
-支持 **5 种备份来源**：Google AI Studio、Cherry Studio、Qwen、Claude 与 RikkaHub。生成的 Markdown 文档可直接导入 [AfterChat](https://github.com/AfterThink/AfterChat-App-Download) 工作区。
+支持 **6 种备份来源**：ChatGPT、Claude、Google AI Studio、Cherry Studio、Qwen 与 RikkaHub。生成的 Markdown 文档可直接导入 [AfterChat](https://github.com/AfterThink/AfterChat-App-Download) 工作区。
 
 ---
 
@@ -21,10 +21,11 @@
 
 | 来源 | 输入 | 输出 |
 | --- | --- | --- |
+| ChatGPT | 官方数据导出 ZIP / JSON | Markdown ZIP |
+| Claude | 数据导出 ZIP | Markdown ZIP |
 | Google AI Studio | 导出的 JSON | Markdown（单文件，或目录树） |
 | Cherry Studio | 备份 ZIP | Markdown ZIP |
 | Qwen | 网页版导出的 JSON | Markdown ZIP |
-| Claude | 数据导出 ZIP | Markdown ZIP |
 | RikkaHub | 备份 ZIP | Markdown ZIP |
 
 转换后的结构示例：
@@ -65,9 +66,10 @@ chat-export-rikka-all-1730000000000.zip
 
 ### 命令行工具
 
-安装包或免安装压缩包中均包含以下 5 个独立可执行文件：
+安装包或免安装压缩包中均包含以下 6 个独立可执行文件：
 
 ```powershell
+chatgpt   chatgpt-export.zip         # ChatGPT 官方数据导出（ZIP 内含 conversations.json，或单个 JSON）
 rikka     RikkaHub-backup.zip        # RikkaHub 备份（自动读取压缩包内的 SQLite 数据库）
 cherry    cherry-backup.zip          # Cherry Studio 备份
 qwen      qwen-all.json              # Qwen 导出（支持传入多个文件）
@@ -75,11 +77,17 @@ claude    data-export.zip            # Claude 数据导出包
 ai-studio prompt.json                # Google AI Studio 导出文件
 ```
 
-默认输出至**源文件同级目录**，亦可通过 `-o` 选项指定输出目录或输出文件名：
+默认输出至**源文件同级目录**打包为 ZIP，亦可通过 `-o` 选项指定输出目标：
 
 ```powershell
-rikka backup.zip -o out\              # 输出至 out\chat-export-rikka-all-<时间戳>.zip
-rikka backup.zip -o out\my-name.zip   # 显式指定 ZIP 文件名
+# 目录展开模式：直接把各会话落地为 Markdown 文件树（专为 AfterChat / Obsidian 等本地知识库接入设计）
+chatgpt backup.zip -o D:\MyVault\
+
+# 归档模式：显式指定输出 ZIP 文件路径
+chatgpt backup.zip -o out\my-name.zip
+
+# 提取模式：若传入的是已符合 AfterChat 规范的 ZIP，直接解压提取到指定目录
+claude chat-export-claude-all-xxx.zip -o D:\MyVault\
 ```
 
 亦可直接将文件拖拽至单个可执行文件图标上运行（`ai-studio` 默认输出单文件 Markdown，建议通过命令行运行）。

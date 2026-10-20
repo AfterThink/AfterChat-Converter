@@ -7,5 +7,6 @@ members = [
     "crates/afterchat-qwen",
     "crates/afterchat-claude",
     "crates/afterchat-rikka",
+    "crates/afterchat-chatgpt",
     "gui/src-tauri",
 ]

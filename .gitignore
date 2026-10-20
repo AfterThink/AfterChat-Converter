@@ -7,3 +7,6 @@ node_modules/
 
 # CI/release 产物
 dist/
+
+# 本地临时调试与转换测试目录
+/tmp/

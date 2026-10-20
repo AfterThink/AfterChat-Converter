@@ -1,4 +1,5 @@
-use std::fs;
+use std::fs::{self, File};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -317,6 +318,53 @@ fn rejects_json_that_is_not_a_qwen_session() {
     let output = run_qwen(&[as_str(&source)]);
     assert!(!output.status.success(), "should fail on non-session json");
     assert!(!tmp.path().join("untitled.md").exists());
+}
+
+#[test]
+fn all_export_writes_directory_when_output_is_dir() {
+    let tmp = tempdir().expect("tempdir");
+    let payload = all_export_json(serde_json::json!([
+        session("s-1", "First", 1_700_000_000_000, "one"),
+        session("s-2", "Second", 1_700_001_000_000, "two"),
+    ]));
+    let source = tmp.path().join("all.json");
+    fs::write(&source, payload).expect("write input");
+
+    let out_dir = tmp.path().join("vault");
+    run_qwen(&[as_str(&source), "-o", as_str(&out_dir)]).assert_success();
+
+    assert!(out_dir.exists());
+    let files: Vec<PathBuf> = fs::read_dir(&out_dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(files.len(), 2);
+    assert!(files.iter().any(|f| f.to_string_lossy().contains("First")));
+    assert!(files.iter().any(|f| f.to_string_lossy().contains("Second")));
+}
+
+#[test]
+fn unpacks_afterchat_zip_directly() {
+    let tmp = tempdir().expect("tempdir");
+    let afterchat_zip = tmp.path().join("afterchat_vault.zip");
+
+    {
+        let file = File::create(&afterchat_zip).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file("sample.md", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(b"# Hello Qwen Vault").unwrap();
+        zip.finish().unwrap();
+    }
+
+    let out_dir = tmp.path().join("unpacked");
+    run_qwen(&[as_str(&afterchat_zip), "-o", as_str(&out_dir)]).assert_success();
+
+    assert!(out_dir.join("sample.md").exists());
+    assert_eq!(
+        fs::read_to_string(out_dir.join("sample.md")).unwrap(),
+        "# Hello Qwen Vault"
+    );
 }
 
 trait AssertSuccess {

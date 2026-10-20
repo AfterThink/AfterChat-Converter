@@ -122,7 +122,7 @@ pub fn write_zip(export: &ZipExport<'_>) -> Result<()> {
 }
 
 /// 时间降序（最新在前，用户约定）；无时间的垫底并保持原有相对顺序。
-fn order_conversations(conversations: &[Conversation]) -> Vec<usize> {
+pub(crate) fn order_conversations(conversations: &[Conversation]) -> Vec<usize> {
     let mut order: Vec<usize> = (0..conversations.len()).collect();
     order.sort_by(
         |&a, &b| match (conversations[a].sort_ms(), conversations[b].sort_ms()) {
@@ -135,7 +135,7 @@ fn order_conversations(conversations: &[Conversation]) -> Vec<usize> {
     order
 }
 
-fn entry_name(
+pub(crate) fn entry_name(
     conversation: &Conversation,
     index: usize,
     total: usize,
@@ -164,7 +164,7 @@ fn entry_name(
 }
 
 /// 同一条目名重复时追加 `-2` / `-3`（扩展名保持在末尾）。
-fn unique_entry_name(name: &str, used: &mut HashSet<String>) -> String {
+pub(crate) fn unique_entry_name(name: &str, used: &mut HashSet<String>) -> String {
     if used.insert(name.to_string()) {
         return name.to_string();
     }
@@ -184,22 +184,26 @@ fn unique_entry_name(name: &str, used: &mut HashSet<String>) -> String {
     }
 }
 
-fn failure_markdown(export: &ZipExport<'_>) -> String {
-    let failures = export.failures;
+pub(crate) fn failure_markdown_content(
+    platform: &str,
+    total_exported: usize,
+    failures: &[ExportFailure],
+    source: Option<&Path>,
+) -> String {
     let mut lines: Vec<String> = Vec::new();
     lines.push("# Export Failures".to_string());
     lines.push(String::new());
     lines.push("## Metadata".to_string());
     lines.push(String::new());
-    lines.push(format!("- **Platform:** `{}`", export.platform));
-    if let Some(source) = export.source {
+    lines.push(format!("- **Platform:** `{platform}`"));
+    if let Some(source) = source {
         lines.push(format!("- **Source:** `{}`", source.display()));
     }
     lines.push(format!(
         "- **Total Conversations:** {}",
-        export.conversations.len() + failures.len()
+        total_exported + failures.len()
     ));
-    lines.push(format!("- **Exported:** {}", export.conversations.len()));
+    lines.push(format!("- **Exported:** {total_exported}"));
     lines.push(format!("- **Failed:** {}", failures.len()));
     lines.push(String::new());
     lines.push("## Failed Conversations".to_string());
@@ -213,6 +217,15 @@ fn failure_markdown(export: &ZipExport<'_>) -> String {
     lines.push(String::new());
 
     lines.join("\n")
+}
+
+fn failure_markdown(export: &ZipExport<'_>) -> String {
+    failure_markdown_content(
+        export.platform,
+        export.conversations.len(),
+        export.failures,
+        export.source,
+    )
 }
 
 #[cfg(test)]
