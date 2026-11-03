@@ -1,113 +1,76 @@
 <h1 align="center">AfterChat Converter</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Rust-2024-orange?style=for-the-badge&logo=rust" alt="Rust 2024" />
-  <img src="https://img.shields.io/badge/Tauri-1.x-24C8DB?style=for-the-badge&logo=tauri" alt="Tauri" />
-  <img src="https://img.shields.io/badge/Converters-6-success?style=for-the-badge" alt="6 converters" />
-  <img src="https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows" alt="Windows" />
+  <a href="https://github.com/AfterThink/AfterChat-Converter/releases">
+    <img src="https://img.shields.io/github/v/release/AfterThink/AfterChat-Converter?style=for-the-badge&logo=github&color=blue" alt="Latest Release" />
+  </a>
+  <img src="https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows" alt="Platform: Windows" />
+  <a href="./LICENSE">
+    <img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0" />
+  </a>
 </p>
 
 <p align="center">
-  <strong>English</strong> | <a href="README.zh-CN.md">简体中文</a>
+  English | <a href="./README.zh-CN.md">简体中文</a>
 </p>
 
-Convert conversation backups from various AI platforms into standardized **AfterChat Markdown / ZIP** archives for local storage, migration, and offline reading.
+Convert conversation backups scattered across various AI platforms and third-party clients into clean, standardized **Markdown notes** with one click.
 
-Supports **6 backup sources**: ChatGPT, Claude, Google AI Studio, Cherry Studio, Qwen, and RikkaHub. Generated Markdown documents can be directly imported into the [AfterChat](https://github.com/AfterThink/AfterChat-App-Download) workspace.
+Supports official exports and client backups from **ChatGPT, Claude, Cherry Studio, RikkaHub, Qwen, and Google AI Studio**. Fully preserves **reasoning / thinking processes (CoT)** and **citation sources**, ready to seamlessly plug into **Obsidian, Notion**, or import directly into the **[AfterChat Desktop App](https://github.com/AfterThink/AfterChat-App-Download)** to build your local knowledge base.
 
----
+<p align="center">
+  <img src="https://fastly.jsdelivr.net/gh/AfterThink/assets@main/afterchat-converter/demo.gif" alt="AfterChat Converter Demo" width="85%" />
+  <br>
+  <sub>💡 Drag & drop conversion: drop any backup file or folder to automatically detect the source and batch export to Markdown</sub>
+</p>
 
-## Supported Backups
+## Downloads & Installation
 
-| Source | Input | Output |
-| --- | --- | --- |
-| ChatGPT | Official data export ZIP / JSON | Markdown ZIP |
-| Claude | Data export ZIP | Markdown ZIP |
-| Google AI Studio | Exported JSON | Markdown (Single file or directory tree) |
-| Cherry Studio | Backup ZIP | Markdown ZIP |
-| Qwen | Web exported JSON | Markdown ZIP |
-| RikkaHub | Backup ZIP | Markdown ZIP |
+Get pre-built binaries directly from the [Releases page](https://github.com/AfterThink/AfterChat-Converter/releases).
 
-Example output structure:
+## Supported Backup Sources
 
-```
-chat-export-claude-all-1730000000000.zip
-├── 20241114-101500-First_Conversation.md
-├── 20241113-090000-Second_Conversation.md
-└── export-failures.md          # Recorded here if a session contains no exportable messages
-```
-
-Platforms grouping by assistant (Cherry / Qwen / RikkaHub) include a subfolder:
-
-```
-chat-export-rikka-all-1730000000000.zip
-└── Gemini/
-    └── 20241114-101500-First_Conversation.md
-```
-
-## Downloads
-
-Visit [Releases](https://github.com/AfterThink/AfterChat-Converter/releases) to download pre-built binaries:
-
-| File | Description |
+| Source Platform / Client | Supported Backup Format |
 | --- | --- |
-| `afterchat-converter_<version>_x64-setup.exe` | Installer: Desktop application (includes Start Menu shortcut and uninstaller) |
-| `afterchat-converter-<version>-windows-x64.zip` | Portable: Extract and run `afterchat-converter.exe` directly |
+| **ChatGPT** | Official data export ZIP |
+| **Claude** | Official account data export ZIP |
+| **Cherry Studio** | Client backup ZIP archive |
+| **RikkaHub** | Client backup ZIP archive |
+| **Qwen** | Web exported JSON file |
+| **Google AI Studio** | Google Drive exported JSON file |
 
 ## Usage
 
-### Desktop Application
+### 1. Desktop Application (Recommended)
 
-1. Launch the application and drag backup files (or folders) into the window.
-2. The application automatically routes the file to the corresponding converter based on file attributes.
-3. Upon completion, `chat-export-<platform>-all-<timestamp>.zip` is saved alongside the source file.
+1. **Launch**: Open `afterchat-converter`;
+2. **Drag & Drop**: Drag any supported backup file (ZIP / JSON) into the application window;
+3. **Auto-Detect**: The application automatically identifies the platform based on file characteristics and converts it instantly;
+4. **Get Markdown**: Converted Markdown archives are saved next to the original file by default. Check "Output to custom directory" at the bottom to choose an alternative folder.
 
-You can check "Output to custom directory" at the bottom of the window to select an alternative destination. See [docs/GUI.md](./docs/GUI.md) for details.
+### 2. Command-Line Tools (CLI / Advanced Automation)
 
-### Command-Line Interface (CLI)
-
-Both the installer and portable archive contain 6 standalone executable binaries:
-
-```powershell
-chatgpt   chatgpt-export.zip         # ChatGPT data export (ZIP containing conversations.json, or single JSON)
-rikka     RikkaHub-backup.zip        # RikkaHub backup (automatically extracts and reads SQLite DB)
-cherry    cherry-backup.zip          # Cherry Studio backup
-qwen      qwen-all.json              # Qwen export (supports multiple files)
-claude    data-export.zip            # Claude data export archive
-ai-studio prompt.json                # Google AI Studio export file
-```
-
-By default, outputs are packaged into a ZIP archive next to the source file. Use `-o` to customize the destination:
+The package includes 6 standalone CLI executables for each source, perfect for scripts and automated ingestion into knowledge bases (e.g., Obsidian):
 
 ```powershell
-# Directory Expansion Mode: Directly writes individual Markdown files into a folder (ideal for AfterChat / Obsidian vaults)
-chatgpt backup.zip -o D:\MyVault\
-
-# Explicit ZIP Mode: Explicitly specifies the output archive filename
-chatgpt backup.zip -o out\my-name.zip
-
-# Direct Unpack Mode: Drops an existing AfterChat format ZIP directly into the destination vault
-claude chat-export-claude-all-xxx.zip -o D:\MyVault\
+# Basic conversion (creates an archive next to source files by default)
+chatgpt   chatgpt-export.zip         # Convert ChatGPT official export
+claude    data-export.zip            # Convert Claude official export
+cherry    cherry-backup.zip          # Convert Cherry Studio client backup
+rikka     RikkaHub-backup.zip        # Convert RikkaHub client backup
+qwen      qwen-all.json              # Convert Qwen exported JSON
+ai-studio prompt.json                # Convert Google AI Studio export file
 ```
-
-Files can also be directly dropped onto individual executable icons in File Explorer (`ai-studio` outputs single Markdown files and is best run via CLI).
-
-## Features
-
-- **Unified Output Contract**: All converters adhere strictly to the [AfterChat-Format Specification](./docs/CHATFORMAT.md).
-- **Reasoning Process Preservation**: Thought processes and final responses are cleanly separated as `#### 🤔 Thought Process` and `#### 💡 Response`.
-- **Empty Session Aggregation**: Sessions without exportable messages are aggregated into `export-failures.md` instead of creating empty files.
-- **Fault-Tolerant Processing**: Failure of an individual session does not interrupt the batch conversion process.
 
 ## Building from Source
 
 Prerequisites: Rust (stable) and [Bun](https://bun.sh/):
 
 ```powershell
-# Build 5 CLI converters
+# Build CLI converter binaries
 cargo build --release
 
-# Build desktop application (sidecars are compiled and packaged automatically)
+# Build desktop application (sidecar binaries are bundled automatically)
 cd gui
 bun install
 bun run build
@@ -115,9 +78,9 @@ bun run build
 
 ## Related Projects
 
-- [AfterChat-Script](https://github.com/AfterThink/AfterChat-Script): browser userscript that exports online web chats into Markdown, the same format this tool outputs.
-- [AfterChat Desktop App](https://github.com/AfterThink/AfterChat-App-Download): manage your conversations and build a knowledge base locally.
+- [AfterChat-Script](https://github.com/AfterThink/AfterChat-Script): Browser userscript for one-click chat exporting while browsing web LLMs.
+- [AfterChat Desktop App](https://github.com/AfterThink/AfterChat-App-Download): Local AI conversation management and offline knowledge base.
 
 ## License
 
-This project is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+Licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).

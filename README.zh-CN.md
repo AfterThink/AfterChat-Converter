@@ -1,113 +1,76 @@
 <h1 align="center">AfterChat Converter</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Rust-2024-orange?style=for-the-badge&logo=rust" alt="Rust 2024" />
-  <img src="https://img.shields.io/badge/Tauri-1.x-24C8DB?style=for-the-badge&logo=tauri" alt="Tauri" />
-  <img src="https://img.shields.io/badge/Converters-6-success?style=for-the-badge" alt="6 converters" />
-  <img src="https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows" alt="Windows" />
+  <a href="https://github.com/AfterThink/AfterChat-Converter/releases">
+    <img src="https://img.shields.io/github/v/release/AfterThink/AfterChat-Converter?style=for-the-badge&logo=github&color=blue" alt="Latest Release" />
+  </a>
+  <img src="https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows" alt="Platform: Windows" />
+  <a href="./LICENSE">
+    <img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?style=for-the-badge" alt="License: AGPL-3.0" />
+  </a>
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> | <strong>简体中文</strong>
+  <a href="./README.md">English</a> | 简体中文
 </p>
 
-把各主流 AI 平台的**对话备份**解析并转换为统一规范的 **AfterChat Markdown / ZIP** 格式，用于本地归档、数据迁移与离线阅读。
+把分散在各大 AI 平台与第三方客户端的历史聊天备份，一键转换为干净、统一的 **Markdown 笔记**。
 
-支持 **6 种备份来源**：ChatGPT、Claude、Google AI Studio、Cherry Studio、Qwen 与 RikkaHub。生成的 Markdown 文档可直接导入 [AfterChat](https://github.com/AfterThink/AfterChat-App-Download) 工作区。
+支持 **ChatGPT、Claude、Cherry Studio、RikkaHub、Qwen、Google AI Studio** 等官方导出与客户端备份。完整保留 **思考过程（Reasoning / CoT）** 与 **引用来源**，无缝接入 **Obsidian、Notion**，或导入 **[AfterChat 桌面端](https://github.com/AfterThink/AfterChat-App-Download)** 构建本地个人知识库。
 
----
+<p align="center">
+  <img src="https://fastly.jsdelivr.net/gh/AfterThink/assets@main/afterchat-converter/demo.gif" alt="AfterChat Converter 演示动图" width="85%" />
+  <br>
+  <sub>💡 支持拖拽转换：拖入任意备份文件或文件夹，自动识别来源并批量输出 Markdown</sub>
+</p>
 
-## 支持的备份
+## 下载与安装
 
-| 来源 | 输入 | 输出 |
-| --- | --- | --- |
-| ChatGPT | 官方数据导出 ZIP / JSON | Markdown ZIP |
-| Claude | 数据导出 ZIP | Markdown ZIP |
-| Google AI Studio | 导出的 JSON | Markdown（单文件，或目录树） |
-| Cherry Studio | 备份 ZIP | Markdown ZIP |
-| Qwen | 网页版导出的 JSON | Markdown ZIP |
-| RikkaHub | 备份 ZIP | Markdown ZIP |
+直接前往 [Releases 页面](https://github.com/AfterThink/AfterChat-Converter/releases) 获取预编译程序。
 
-转换后的结构示例：
+## 支持的备份来源
 
-```
-chat-export-claude-all-1730000000000.zip
-├── 20241114-101500-第一次对话.md
-├── 20241113-090000-第二次对话.md
-└── export-failures.md          # 无法解析或无有效消息的对话记录在此
-```
-
-按助手分目录的平台（Cherry / Qwen / RikkaHub）会生成分组子目录：
-
-```
-chat-export-rikka-all-1730000000000.zip
-└── Gemini/
-    └── 20241114-101500-第一次对话.md
-```
-
-## 下载
-
-访问 [Releases](https://github.com/AfterThink/AfterChat-Converter/releases) 下载预编译版本：
-
-| 文件 | 说明 |
-| --- | --- |
-| `afterchat-converter_<版本>_x64-setup.exe` | 安装版：桌面应用（含开始菜单快捷方式与卸载程序） |
-| `afterchat-converter-<版本>-windows-x64.zip` | 绿色免安装版：解压后运行 `afterchat-converter.exe` 即可使用 |
+| 来源平台 / 客户端 | 支持的备份格式 | 
+| --- | --- | 
+| **ChatGPT** | 官方设置中导出的数据 ZIP | 
+| **Claude** | 官方账号导出的完整数据包 ZIP | 
+| **Cherry Studio** | 客户端备份 ZIP 压缩包 | 
+| **RikkaHub** | 客户端备份 ZIP 压缩包 | 
+| **Qwen** | 网页版导出的 JSON 文件 | 
+| **Google AI Studio** | Google Drive 导出的 JSON 文件 | 
 
 ## 使用方法
 
-### 桌面应用
+### 1. 桌面端应用（推荐）
 
-1. 打开应用，将备份文件（或包含备份的文件夹）拖入窗口；
-2. 程序根据文件特征自动匹配对应的转换器；
-3. 转换完成后，导出的 `chat-export-<平台>-all-<时间戳>.zip` 默认保存在源文件同级目录下。
+1. **打开软件**：启动 `afterchat-converter`；
+2. **直接拖入**：将任意支持的备份文件（ZIP / JSON）拖拽到软件窗口中；
+3. **极速解析**：软件会自动根据文件特征**智能识别所属平台**并完成转换；
+4. **获取结果**：转换完成后，生成的标准 Markdown 归档包默认保存在源文件同级目录下。可在窗口底部勾选「输出到自定义目录」更改输出路径。
 
-可在窗口底部勾选「输出到自定义目录」。详细支持格式与路由规则参见 [docs/GUI.md](./docs/GUI.md)。
+### 2. 命令行工具（CLI / 高级自动化）
 
-### 命令行工具
-
-安装包或免安装压缩包中均包含以下 6 个独立可执行文件：
+程序包内内置了 6 个针对各来源的独立可执行工具，方便脚本自动化或批量接入知识库（如 Obsidian）：
 
 ```powershell
-chatgpt   chatgpt-export.zip         # ChatGPT 官方数据导出（ZIP 内含 conversations.json，或单个 JSON）
-rikka     RikkaHub-backup.zip        # RikkaHub 备份（自动读取压缩包内的 SQLite 数据库）
-cherry    cherry-backup.zip          # Cherry Studio 备份
-qwen      qwen-all.json              # Qwen 导出（支持传入多个文件）
-claude    data-export.zip            # Claude 数据导出包
-ai-studio prompt.json                # Google AI Studio 导出文件
+# 基础转换（默认在源文件同级目录生成归档）
+chatgpt   chatgpt-export.zip         # 转换 ChatGPT 官方导出包
+claude    data-export.zip            # 转换 Claude 官方导出包
+cherry    cherry-backup.zip          # 转换 Cherry Studio 客户端备份
+rikka     RikkaHub-backup.zip        # 转换 RikkaHub 客户端备份
+qwen      qwen-all.json              # 转换 Qwen 导出的 JSON
+ai-studio prompt.json                # 转换 Google AI Studio 导出文件
 ```
 
-默认输出至**源文件同级目录**打包为 ZIP，亦可通过 `-o` 选项指定输出目标：
+## 源码构建
+
+如需自行编译，需要安装 Rust (stable) 与 [Bun](https://bun.sh/)：
 
 ```powershell
-# 目录展开模式：直接把各会话落地为 Markdown 文件树（专为 AfterChat / Obsidian 等本地知识库接入设计）
-chatgpt backup.zip -o D:\MyVault\
-
-# 归档模式：显式指定输出 ZIP 文件路径
-chatgpt backup.zip -o out\my-name.zip
-
-# 提取模式：若传入的是已符合 AfterChat 规范的 ZIP，直接解压提取到指定目录
-claude chat-export-claude-all-xxx.zip -o D:\MyVault\
-```
-
-亦可直接将文件拖拽至单个可执行文件图标上运行（`ai-studio` 默认输出单文件 Markdown，建议通过命令行运行）。
-
-## 特性
-
-- **统一输出规范**：各转换器输出结构高度一致，严格遵循 [AfterChat-Format](./docs/CHATFORMAT.md)；
-- **思维链保留**：区分思考过程与正文回复（`#### 🤔 Thought Process` 与 `#### 💡 Response`）；
-- **异常会话汇总**：无有效消息的空会话不会生成空文件，而是统一汇总至包内的 `export-failures.md`；
-- **容错处理**：单个会话解析失败不影响批处理中其他会话的转换，进程正常退出。
-
-## 构建
-
-构建环境要求：Rust (stable) 与 [Bun](https://bun.sh/)：
-
-```powershell
-# 编译 5 个命令行转换器
+# 编译命令行转换工具
 cargo build --release
 
-# 编译桌面应用（会自动将转换器作为 sidecar 一同打包）
+# 编译桌面图形应用（会自动打包命令行组件作为 sidecar）
 cd gui
 bun install
 bun run build
@@ -115,8 +78,8 @@ bun run build
 
 ## 相关项目
 
-- [AfterChat-Script](https://github.com/AfterThink/AfterChat-Script)：浏览器脚本，一键把各主流平台的网页对话导出为 Markdown，与本工具输出格式一致。
-- [AfterChat 桌面端](https://github.com/AfterThink/AfterChat-App-Download)：在本地管理、构建聊天会话知识库。
+- [AfterChat-Script](https://github.com/AfterThink/AfterChat-Script)：浏览器用户脚本，在网页端与 AI 对话时一键导出或直存。
+- [AfterChat 桌面端](https://github.com/AfterThink/AfterChat-App-Download)：开箱即用的 AI 会话本地管理与离线知识库工具。
 
 ## 开源许可证
 

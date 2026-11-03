@@ -12,12 +12,8 @@ env:
 
 jobs:
   test:
-    name: Test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+    name: Test (windows-x64)
+    runs-on: windows-latest
 
     steps:
       - name: Checkout
@@ -32,11 +28,9 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check formatting
-        if: matrix.os == 'ubuntu-latest'
         run: cargo fmt --all -- --check
 
       - name: Check GUI version consistency
-        if: matrix.os == 'ubuntu-latest'
         shell: pwsh
         run: |
           $pkg   = (Get-Content gui/package.json -Raw | ConvertFrom-Json).version
@@ -53,7 +47,6 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Check GUI lockfile
-        if: matrix.os == 'ubuntu-latest'
         working-directory: gui
         run: bun install --frozen-lockfile
 
