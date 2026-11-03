@@ -19,7 +19,7 @@ Convert conversation backups scattered across various AI platforms and third-par
 Supports official exports and client backups from **ChatGPT, Claude, Cherry Studio, RikkaHub, Qwen, and Google AI Studio**. Fully preserves **reasoning / thinking processes (CoT)** and **citation sources**, ready to seamlessly plug into **Obsidian, Notion**, or import directly into the **[AfterChat Desktop App](https://github.com/AfterThink/AfterChat-App-Download)** to build your local knowledge base.
 
 <p align="center">
-  <img src="https://fastly.jsdelivr.net/gh/AfterThink/assets@main/afterchat-converter/demo.gif" alt="AfterChat Converter Demo" width="85%" />
+  <img src="https://fastly.jsdelivr.net/gh/AfterThink/assets@9e4d7b0/afterchat-converter/demo.gif" alt="AfterChat Converter Demo" width="85%" />
   <br>
   <sub>💡 Drag & drop conversion: drop any backup file or folder to automatically detect the source and batch export to Markdown</sub>
 </p>

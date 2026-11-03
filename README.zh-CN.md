@@ -19,7 +19,7 @@
 支持 **ChatGPT、Claude、Cherry Studio、RikkaHub、Qwen、Google AI Studio** 等官方导出与客户端备份。完整保留 **思考过程（Reasoning / CoT）** 与 **引用来源**，无缝接入 **Obsidian、Notion**，或导入 **[AfterChat 桌面端](https://github.com/AfterThink/AfterChat-App-Download)** 构建本地个人知识库。
 
 <p align="center">
-  <img src="https://fastly.jsdelivr.net/gh/AfterThink/assets@main/afterchat-converter/demo.gif" alt="AfterChat Converter 演示动图" width="85%" />
+  <img src="https://fastly.jsdelivr.net/gh/AfterThink/assets@9e4d7b0/afterchat-converter/demo.gif" alt="AfterChat Converter 演示动图" width="85%" />
   <br>
   <sub>💡 支持拖拽转换：拖入任意备份文件或文件夹，自动识别来源并批量输出 Markdown</sub>
 </p>
