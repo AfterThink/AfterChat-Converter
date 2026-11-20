@@ -9,7 +9,7 @@
   },
   "package": {
     "productName": "afterchat-converter",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "tauri": {
     "allowlist": {
@@ -41,7 +41,8 @@
         "bin/qwen",
         "bin/claude",
         "bin/rikka",
-        "bin/chatgpt"
+        "bin/chatgpt",
+        "bin/deepseek"
       ],
       "identifier": "com.afterthink.afterchat-converter"
     },

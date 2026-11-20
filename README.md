@@ -16,7 +16,7 @@
 
 Convert conversation backups scattered across various AI platforms and third-party clients into clean, standardized **Markdown notes** with one click.
 
-Supports official exports and client backups from **ChatGPT, Claude, Cherry Studio, RikkaHub, Qwen, and Google AI Studio**. Fully preserves **reasoning / thinking processes (CoT)** and **citation sources**, ready to seamlessly plug into **Obsidian, Notion**, or import directly into the **[AfterChat Desktop App](https://github.com/AfterThink/AfterChat-App-Download)** to build your local knowledge base.
+Supports official exports and client backups from **ChatGPT, Claude, DeepSeek, Cherry Studio, RikkaHub, Qwen, and Google AI Studio**. Fully preserves **reasoning / thinking processes (CoT)** and **citation sources**, ready to seamlessly plug into **Obsidian, Notion**, or import directly into the **[AfterChat Desktop App](https://github.com/AfterThink/AfterChat-App-Download)** to build your local knowledge base.
 
 <p align="center">
   <img src="https://fastly.jsdelivr.net/gh/AfterThink/assets@9e4d7b0/afterchat-converter/demo.gif" alt="AfterChat Converter Demo" width="85%" />
@@ -34,6 +34,7 @@ Get pre-built binaries directly from the [Releases page](https://github.com/Afte
 | --- | --- |
 | **ChatGPT** | Official data export ZIP |
 | **Claude** | Official account data export ZIP |
+| **DeepSeek** | Official data export ZIP |
 | **Cherry Studio** | Client backup ZIP archive |
 | **RikkaHub** | Client backup ZIP archive |
 | **Qwen** | Web exported JSON file |
@@ -50,12 +51,13 @@ Get pre-built binaries directly from the [Releases page](https://github.com/Afte
 
 ### 2. Command-Line Tools (CLI / Advanced Automation)
 
-The package includes 6 standalone CLI executables for each source, perfect for scripts and automated ingestion into knowledge bases (e.g., Obsidian):
+The package includes 7 standalone CLI executables for each source, perfect for scripts and automated ingestion into knowledge bases (e.g., Obsidian):
 
 ```powershell
 # Basic conversion (creates an archive next to source files by default)
 chatgpt   chatgpt-export.zip         # Convert ChatGPT official export
 claude    data-export.zip            # Convert Claude official export
+deepseek  deepseek-export.zip        # Convert DeepSeek official export
 cherry    cherry-backup.zip          # Convert Cherry Studio client backup
 rikka     RikkaHub-backup.zip        # Convert RikkaHub client backup
 qwen      qwen-all.json              # Convert Qwen exported JSON

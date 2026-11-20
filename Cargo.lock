@@ -97,13 +97,32 @@ dependencies = [
 
 [[package]]
 name = "afterchat-converter"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "afterchat-chatformat",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
+]
+
+[[package]]
+name = "afterchat-deepseek"
+version = "0.1.0"
+dependencies = [
+ "afterchat-chatformat",
+ "anyhow",
+ "assert_cmd",
+ "chrono",
+ "clap",
+ "env_logger",
+ "log",
+ "predicates",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "walkdir",
+ "zip",
 ]
 
 [[package]]

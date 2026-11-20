@@ -397,7 +397,7 @@ function buildSuggestedPath(input) {
 }
 
 function converterOutputsDirectory(converter) {
-  return converter === null || converter === "cherry" || converter === "claude" || converter === "rikka" || converter === "chatgpt";
+  return converter === null || converter === "cherry" || converter === "claude" || converter === "rikka" || converter === "chatgpt" || converter === "deepseek";
 }
 
 function selectConverter(input) {
@@ -409,6 +409,7 @@ function selectConverter(input) {
   if (name.includes("rikka")) return "rikka";
   if (name.includes("ai-studio") || name.includes("aistudio") || name.includes("gemini")) return "ai-studio";
   if (name.includes("chatgpt") || name.includes("openai") || /^[0-9a-f]{64}/i.test(name)) return "chatgpt";
+  if (name.includes("deepseek")) return "deepseek";
   return null;
 }
 

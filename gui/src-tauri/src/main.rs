@@ -50,15 +50,18 @@ enum ConverterKind {
     Claude,
     Rikka,
     Chatgpt,
+    #[serde(rename = "deepseek", alias = "deep-seek")]
+    DeepSeek,
 }
 
-const ALL_CONVERTERS: [ConverterKind; 6] = [
+const ALL_CONVERTERS: [ConverterKind; 7] = [
     ConverterKind::AiStudio,
     ConverterKind::Cherry,
     ConverterKind::Qwen,
     ConverterKind::Claude,
     ConverterKind::Rikka,
     ConverterKind::Chatgpt,
+    ConverterKind::DeepSeek,
 ];
 
 #[derive(Debug, Deserialize)]
@@ -222,6 +225,7 @@ async fn try_sidecar(converter: ConverterKind, args: &[String]) -> Result<Sideca
         ConverterKind::Claude => "claude",
         ConverterKind::Rikka => "rikka",
         ConverterKind::Chatgpt => "chatgpt",
+        ConverterKind::DeepSeek => "deepseek",
     };
 
     let (mut receiver, _child) = Command::new_sidecar(sidecar_name)
@@ -279,6 +283,11 @@ fn predict_output_path(
             .map(Path::to_path_buf)
             .unwrap_or_else(|| PathBuf::from("."))
             .join("chatgpt_markdowns"),
+        Some(ConverterKind::DeepSeek) => input_path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("deepseek_markdowns"),
         _ => {
             if input_path.is_dir() {
                 input_path.to_path_buf()
@@ -402,4 +411,20 @@ fn main() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running converters gui");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deserializes_deepseek_converter_kind() {
+        let req1: ConvertRequest =
+            serde_json::from_str(r#"{"converter": "deepseek", "inputPath": "test"}"#).unwrap();
+        assert!(matches!(req1.converter, Some(ConverterKind::DeepSeek)));
+
+        let req2: ConvertRequest =
+            serde_json::from_str(r#"{"converter": "deep-seek", "inputPath": "test"}"#).unwrap();
+        assert!(matches!(req2.converter, Some(ConverterKind::DeepSeek)));
+    }
 }

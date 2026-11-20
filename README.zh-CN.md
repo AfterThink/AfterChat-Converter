@@ -16,7 +16,7 @@
 
 把分散在各大 AI 平台与第三方客户端的历史聊天备份，一键转换为干净、统一的 **Markdown 笔记**。
 
-支持 **ChatGPT、Claude、Cherry Studio、RikkaHub、Qwen、Google AI Studio** 等官方导出与客户端备份。完整保留 **思考过程（Reasoning / CoT）** 与 **引用来源**，无缝接入 **Obsidian、Notion**，或导入 **[AfterChat 桌面端](https://github.com/AfterThink/AfterChat-App-Download)** 构建本地个人知识库。
+支持 **ChatGPT、Claude、DeepSeek、Cherry Studio、RikkaHub、Qwen、Google AI Studio** 等官方导出与客户端备份。完整保留 **思考过程（Reasoning / CoT）** 与 **引用来源**，无缝接入 **Obsidian、Notion**，或导入 **[AfterChat 桌面端](https://github.com/AfterThink/AfterChat-App-Download)** 构建本地个人知识库。
 
 <p align="center">
   <img src="https://fastly.jsdelivr.net/gh/AfterThink/assets@9e4d7b0/afterchat-converter/demo.gif" alt="AfterChat Converter 演示动图" width="85%" />
@@ -34,6 +34,7 @@
 | --- | --- | 
 | **ChatGPT** | 官方设置中导出的数据 ZIP | 
 | **Claude** | 官方账号导出的完整数据包 ZIP | 
+| **DeepSeek** | 官方导出的数据 ZIP | 
 | **Cherry Studio** | 客户端备份 ZIP 压缩包 | 
 | **RikkaHub** | 客户端备份 ZIP 压缩包 | 
 | **Qwen** | 网页版导出的 JSON 文件 | 
@@ -50,12 +51,13 @@
 
 ### 2. 命令行工具（CLI / 高级自动化）
 
-程序包内内置了 6 个针对各来源的独立可执行工具，方便脚本自动化或批量接入知识库（如 Obsidian）：
+程序包内内置了 7 个针对各来源的独立可执行工具，方便脚本自动化或批量接入知识库（如 Obsidian）：
 
 ```powershell
 # 基础转换（默认在源文件同级目录生成归档）
 chatgpt   chatgpt-export.zip         # 转换 ChatGPT 官方导出包
 claude    data-export.zip            # 转换 Claude 官方导出包
+deepseek  deepseek-export.zip        # 转换 DeepSeek 官方导出包
 cherry    cherry-backup.zip          # 转换 Cherry Studio 客户端备份
 rikka     RikkaHub-backup.zip        # 转换 RikkaHub 客户端备份
 qwen      qwen-all.json              # 转换 Qwen 导出的 JSON

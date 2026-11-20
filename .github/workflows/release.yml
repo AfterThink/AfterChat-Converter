@@ -86,7 +86,7 @@ jobs:
           $portable = "dist/$zipName"
           New-Item -ItemType Directory -Force $portable | Out-Null
           Copy-Item target/release/afterchat-converter.exe $portable/
-          foreach ($bin in @("ai-studio", "cherry", "qwen", "claude", "rikka", "chatgpt")) {
+          foreach ($bin in @("ai-studio", "cherry", "qwen", "claude", "rikka", "chatgpt", "deepseek")) {
             Copy-Item "target/release/$bin.exe" $portable/
           }
           Compress-Archive -Path "$portable/*" -DestinationPath "dist/$zipName.zip" -Force
